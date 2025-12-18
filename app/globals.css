@@ -1,21 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --background: #0a0a0a; /* Deep charcoal black */
-  --foreground: #ededed; /* Soft white */
+html, body {
+  height: 100%;
+  margin: 0;
+  background: #000;
+  color: #fff;
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  overflow-x: hidden;
-}
-
-/* Custom Selection Color (Matches the brand) */
-::selection {
-  background: #ff0055;
-  color: white;
-}
+* { box-sizing: border-box; }

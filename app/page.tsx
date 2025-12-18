@@ -1,19 +1,27 @@
-import Navbar from '@/components/layout/Navbar';
-import Hero from '@/components/sections/Hero';
+"use client";
+
+import { useState } from "react";
+import Hero from "@/components/hero/Hero";
+import Navbar from "@/components/nav/Navbar";
 
 export default function Home() {
-  return (
-    <main className="bg-[#0a0a0a] min-h-screen text-white">
-      {/* The Intelligent Navbar */}
-      <Navbar />
-      
-      {/* The Melting Hero Section */}
-      <Hero />
+  const [showNav, setShowNav] = useState(false);
 
-      {/* Extra space to allow scrolling so the effect works */}
-      <section className="h-screen w-full flex items-center justify-center border-t border-gray-800">
-        <p className="text-gray-500 tracking-widest">SCROLL FOR MORE MAGIC</p>
-      </section>
+  return (
+    <main>
+      <Navbar
+        logoSrc="/images/logo.png"
+        show={showNav}
+        brandColor="#c6376c"
+      />
+
+      <Hero
+        imageSrc="/images/titleimage.png"
+        onScrolledChange={(v) => setShowNav(v)}
+      />
+
+      {/* extra height so you can scroll and see navbar appear */}
+      <div style={{ height: "200vh", background: "#000" }} />
     </main>
   );
 }
