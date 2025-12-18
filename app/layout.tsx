@@ -1,4 +1,5 @@
 import "./globals.css";
+import { offBit } from "./fonts";
 
 export const metadata = {
   title: "SLOW DRAG",
@@ -7,7 +8,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={offBit.variable}>
       <body>{children}</body>
     </html>
   );

@@ -1,18 +1,24 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type HeroProps = {
   imageSrc: string;
-  onScrolledChange?: (scrolled: boolean) => void; // tells parent when to show navbar
+  onScrolledChange?: (scrolled: boolean) => void;
 };
 
 export default function Hero({ imageSrc, onScrolledChange }: HeroProps) {
   const router = useRouter();
-  const [scrolled, setScrolled] = useState(false);
 
+  const heroRef = useRef<HTMLElement | null>(null);
+  const [scrolled, setScrolled] = useState(false);
+  const [inHero, setInHero] = useState(true);
+
+  const brandPink = "#c6376c";
+
+  // show nav after scroll starts (same behavior you had)
   useEffect(() => {
     const onScroll = () => {
       const next = window.scrollY > 10;
@@ -24,10 +30,29 @@ export default function Hero({ imageSrc, onScrolledChange }: HeroProps) {
     return () => window.removeEventListener("scroll", onScroll);
   }, [onScrolledChange]);
 
-  const brandPink = "#c6376c";
+  // track whether we are still inside the hero section
+  useEffect(() => {
+    const el = heroRef.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        setInHero(entries[0]?.isIntersecting ?? true);
+      },
+      {
+        threshold: 0.15, // consider hero active while 15% visible
+      }
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   return (
     <section
+      ref={(n) => {
+        heroRef.current = n;
+      }}
       aria-label="Hero"
       style={{
         minHeight: "100vh",
@@ -50,13 +75,13 @@ export default function Hero({ imageSrc, onScrolledChange }: HeroProps) {
         />
       </div>
 
-      {/* Text overlays appear after scroll */}
-      {scrolled && (
+      {/* HERO OVERLAYS — ONLY when in hero + after scroll */}
+      {scrolled && inHero && (
         <>
           {/* Left quote */}
           <div
             style={{
-              position: "fixed",
+              position: "absolute",
               left: 44,
               bottom: 90,
               maxWidth: 420,
@@ -68,7 +93,7 @@ export default function Hero({ imageSrc, onScrolledChange }: HeroProps) {
               textTransform: "uppercase",
               color: "#e8e8e8",
               opacity: 0.92,
-              zIndex: 40,
+              pointerEvents: "none",
             }}
           >
             “IMAGES&nbsp;&nbsp;BREATHE
@@ -81,7 +106,7 @@ export default function Hero({ imageSrc, onScrolledChange }: HeroProps) {
           {/* Right tagline */}
           <div
             style={{
-              position: "fixed",
+              position: "absolute",
               right: 56,
               top: "50%",
               transform: "translateY(-50%)",
@@ -93,7 +118,7 @@ export default function Hero({ imageSrc, onScrolledChange }: HeroProps) {
               letterSpacing: "0.06em",
               color: "#e8e8e8",
               opacity: 0.9,
-              zIndex: 40,
+              pointerEvents: "none",
             }}
           >
             Rhythm.
@@ -108,7 +133,7 @@ export default function Hero({ imageSrc, onScrolledChange }: HeroProps) {
             type="button"
             onClick={() => router.push("/contact")}
             style={{
-              position: "fixed",
+              position: "absolute",
               right: 34,
               bottom: 32,
               padding: "12px 22px",
@@ -121,7 +146,6 @@ export default function Hero({ imageSrc, onScrolledChange }: HeroProps) {
               textTransform: "uppercase",
               cursor: "pointer",
               backdropFilter: "blur(6px)",
-              zIndex: 40,
             }}
           >
             CONTACT US
@@ -129,13 +153,13 @@ export default function Hero({ imageSrc, onScrolledChange }: HeroProps) {
         </>
       )}
 
-      {/* REGISTER button only at top (no scroll yet) */}
+      {/* REGISTER button only when user hasn't scrolled yet */}
       {!scrolled && (
         <button
           type="button"
           onClick={() => router.push("/register")}
           style={{
-            position: "fixed",
+            position: "absolute",
             right: 32,
             bottom: 32,
             padding: "14px 22px",
@@ -148,7 +172,6 @@ export default function Hero({ imageSrc, onScrolledChange }: HeroProps) {
             textTransform: "uppercase",
             cursor: "pointer",
             boxShadow: "0 10px 30px rgba(198, 55, 108, 0.35)",
-            zIndex: 40,
           }}
         >
           Register
