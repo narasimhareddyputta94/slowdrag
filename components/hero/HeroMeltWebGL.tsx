@@ -59,6 +59,16 @@ function attachFB(gl: WebGLRenderingContext, tex: WebGLTexture) {
   return fb;
 }
 
+/* ---------------- Small blit shader (used to preserve masks on resize) ---------------- */
+const BLIT_FRAG = `
+precision highp float;
+uniform sampler2D u_tex;
+varying vec2 v_uv;
+void main(){
+  gl_FragColor = texture2D(u_tex, v_uv);
+}
+`;
+
 /* ---------------- Shaders ---------------- */
 const VERT = `
 attribute vec2 a_pos;
@@ -136,20 +146,27 @@ void main() {
   float prev0 = texture2D(u_prevMask, v_uv).r;
   float anim = u_anim;
   float p = clamp(u_time, 0.0, 1.25);
-  // slightly slower, more controllable progression
-  float t = pow(p, 2.15);
+  // heavier syrup: slower ramp
+  float t = pow(p, 2.35);
 
   // per-column micro delay so it doesn't melt "all at once"
   float laneDelay = (fbm(vec2(uv.x * 4.2 + u_seed, 12.7)) - 0.5) * 0.22;
   float tt = clamp(t - laneDelay, 0.0, 1.25);
   // flow strength increases as melt progresses
-  float flowStrength = (0.0005 + 0.0060 * smoothstep(0.06, 0.95, tt));
+  // heavier syrup: slower flow
+  float flowStrength = (0.00035 + 0.0042 * smoothstep(0.08, 0.98, tt));
   float flowLane = smoothstep(0.10, 0.90, fbm(vec2(uv.x * 7.0 + u_seed, anim * 0.10)));
   vec2 ff = flowField(vec2(uv.x * 2.2 + u_seed * 0.07, uv.y * 2.2 + anim * 0.10));
-  float flowX = ff.x * flowStrength * (0.30 + 0.70 * flowLane);
-  float flowY = (abs(ff.y) * 0.55 + 0.45) * flowStrength * (0.55 + 0.65 * flowLane);
-  // sample slightly above to pull mask down over time (monotonic via max)
-  float carried = texture2D(u_prevMask, v_uv + vec2(-flowX, flowY)).r;
+  // natural-ish velocity (gravity-biased curl flow)
+  float laneAmt = (0.30 + 0.70 * flowLane);
+  float gravAmt = (0.55 + 0.45 * smoothstep(0.10, 1.05, tt));
+  float velX = ff.x * flowStrength * laneAmt;
+  float velY = mix(abs(ff.y), 1.0, 0.45) * flowStrength * (0.55 + 0.55 * laneAmt) * gravAmt;
+
+  // multi-sample advection: longer, smoother drips
+  float carried1 = texture2D(u_prevMask, v_uv + vec2(-velX, velY)).r;
+  float carried2 = texture2D(u_prevMask, v_uv + vec2(-velX * 1.75, velY * 1.65)).r;
+  float carried = max(carried1, carried2 * 0.995);
   float prev = max(prev0, carried * 0.997);
 
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
@@ -201,7 +218,8 @@ void main() {
   newMelt += globMask * visc * (0.12 + 0.25 * tt);
 
   // let accumulated mask keep creeping downward (still monotonic)
-  float creep = smoothstep(0.25, 1.05, tt) * flowLane * 0.06;
+  // slower creep so it feels thick
+  float creep = smoothstep(0.28, 1.10, tt) * flowLane * 0.035;
   float next = max(prev, clamp(newMelt + prev * creep, 0.0, 1.0));
   gl_FragColor = vec4(next, 0.0, 0.0, 1.0);
 }
@@ -264,6 +282,11 @@ vec2 aspectFitUV(vec2 uv, vec2 canvasPx, vec2 imgPx){
   return (uv - 0.5) * scale + 0.5;
 }
 
+vec4 sampleLogoSafe(sampler2D tex, vec2 uv){
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);
+  return texture2D(tex, uv);
+}
+
 float edgeAlpha(sampler2D tex, vec2 uv, vec2 res){
   vec2 px = 1.0 / res;
   float a  = texture2D(tex, uv).a;
@@ -288,24 +311,38 @@ void main() {
   float pr = clamp(u_progress, 0.0, 1.0);
   float meltAmt = smoothstep(0.02, 0.85, m) * pr;
 
+  // Keep the top more intact (reference keeps crisp letters while drips form).
+  float topHold = smoothstep(0.58, 0.84, uv.y);
+  meltAmt *= (1.0 - 0.70 * topHold);
+
   float anim = u_anim;
   float lane = smoothstep(0.16, 0.94, noise(vec2(uv.x * 8.5 + u_seed, 0.22 + anim * 0.08)));
   float micro = noise(vec2(uv.x * 78.0 + u_seed, m * 2.7 + 3.0 + anim * 0.22));
   float channel = mix(lane, micro, 0.20);
 
-  float visc = smoothstep(0.10, 0.75, m) * (0.55 + 0.45 * channel);
+  float visc = smoothstep(0.08, 0.78, m) * (0.62 + 0.38 * channel);
+
+  // A band around the melt-front: prevents the whole logo becoming one big sheet at the end.
+  float mBand = smoothstep(0.10, 0.72, m) * (1.0 - smoothstep(0.82, 1.02, m));
 
   // slow heavy fall (adds a touch of animated ooze)
-  float ooze = (noise(vec2(uv.x * 6.0 + u_seed, anim * 0.25 + uv.y * 2.0)) - 0.5);
-  float g = m * (0.10 + 1.12 * channel) * (0.55 + 0.45 * visc);
-  g *= (1.0 + ooze * 0.06 * smoothstep(0.08, 0.75, m));
+  float ooze = (noise(vec2(uv.x * 4.6 + u_seed, anim * 0.18 + uv.y * 1.6)) - 0.5);
+  float dripSel = smoothstep(0.22, 0.86, channel);
+  float g = mBand * (0.10 + 0.90 * dripSel) * (0.70 + 0.30 * visc);
+  // still allow a tiny amount of late creep so drips feel heavy, not frozen
+  g += pow(clamp(m, 0.0, 1.0), 2.2) * 0.010 * (0.45 + 0.55 * dripSel);
+  g *= (1.0 + ooze * 0.035 * smoothstep(0.10, 0.82, m));
 
-  float widen = smoothstep(0.04, 0.70, g) * (0.0030 + 0.030 * (0.35 + 0.65 * channel));
-  widen *= (0.70 + 0.70 * smoothstep(0.25, 0.95, m));
+  // thicker body
+  float widen = smoothstep(0.05, 0.72, g) * (0.0045 + 0.030 * (0.30 + 0.70 * dripSel));
+  widen *= (0.85 + 0.65 * smoothstep(0.20, 0.92, m));
 
   vec2 ff = flowField(vec2(uv.x * 2.0 + u_seed * 0.09, uv.y * 2.0 + anim * 0.10));
-  float wob = (ff.x * 0.85 + ff.y * 0.35) * (0.0010 + 0.016 * visc) * meltAmt;
-  wob += sin(uv.y * 18.0 + m * 6.0 + channel * 5.0 + anim * 0.9) * (0.0006 + 0.010 * visc) * meltAmt;
+  // heavier syrup: reduced lateral splashes
+  float wob = (ff.x * 0.85 + ff.y * 0.35) * (0.0007 + 0.010 * visc) * meltAmt;
+  wob += sin(uv.y * 14.0 + m * 5.0 + channel * 4.0 + anim * 0.75) * (0.00045 + 0.0065 * visc) * meltAmt;
+  float swirl = fbm(vec2(uv.x * 1.05 + u_seed * 0.11, uv.y * 1.05 + anim * 0.14)) - 0.5;
+  wob += swirl * (0.00045 + 0.0065 * visc) * meltAmt;
 
   float head = smoothstep(0.15, 0.85, m) * (0.35 + 0.65 * channel);
   float headPull = head * (0.02 + 0.18 * m);
@@ -318,30 +355,51 @@ void main() {
   float mU = texture2D(u_mask, v_uv + vec2(0.0, px.y)).r;
   vec2 grad = vec2(mR - mL, mU - mD);
   vec3 nrm = normalize(vec3(-grad * 2.8, 1.0));
+
+  // micro surface detail so the syrup feels less "CG smooth"
+  float microN = (noise(vec2(uvC.x * 160.0 + u_seed, uvC.y * 160.0 + u_anim * 0.70)) - 0.5);
+  nrm = normalize(nrm + vec3(microN * 0.22 * meltAmt, microN * 0.12 * meltAmt, 0.0));
+
   vec3 viewDir = vec3(0.0, 0.0, 1.0);
-  vec3 lightDir = normalize(vec3(-0.35, 0.55, 0.75));
-  float ndl = clamp(dot(nrm, lightDir), 0.0, 1.0);
-  vec3 h = normalize(lightDir + viewDir);
-  float specN = pow(clamp(dot(nrm, h), 0.0, 1.0), 26.0);
+  vec3 lightDir1 = normalize(vec3(-0.35, 0.55, 0.75));
+  vec3 lightDir2 = normalize(vec3( 0.62, 0.15, 0.77));
+
+  float ndl1 = clamp(dot(nrm, lightDir1), 0.0, 1.0);
+  float ndl2 = clamp(dot(nrm, lightDir2), 0.0, 1.0);
+  float ndl = ndl1 * 0.78 + ndl2 * 0.22;
+
+  vec3 h1 = normalize(lightDir1 + viewDir);
+  vec3 h2 = normalize(lightDir2 + viewDir);
+
+  // thickness-driven gloss: thicker syrup = tighter, "wet" highlight
+  float thickForGloss = clamp(smoothstep(0.10, 0.92, m) * (0.55 + 0.45 * smoothstep(0.05, 0.80, g)), 0.0, 1.0);
+  float glossPow = mix(24.0, 115.0, thickForGloss);
+  float spec1 = pow(clamp(dot(nrm, h1), 0.0, 1.0), glossPow);
+  float spec2 = pow(clamp(dot(nrm, h2), 0.0, 1.0), glossPow * 0.75);
+
   float fres = pow(1.0 - clamp(dot(nrm, viewDir), 0.0, 1.0), 2.2);
+  float backL = clamp(dot(nrm, -lightDir1), 0.0, 1.0);
 
-  vec2 s0 = vec2(uv.x + wob,            uv.y + g + headPull);
-  vec2 s1 = vec2(uv.x + wob * 0.65,     uv.y + g * 0.78 + headPull * 0.65);
-  vec2 s2 = vec2(uv.x + wob * 0.30,     uv.y + g * 0.52 + headPull * 0.30);
-  vec2 s3 = vec2(uv.x + wob * 0.12,     uv.y + g * 0.30);
+  // IMPORTANT: sample from ABOVE to pull the logo downward into drips.
+  // (Sampling with +g smears/clamps the bottom edge into a big blob.)
+  vec2 s0p = vec2(uv.x + wob,            uv.y - g - headPull);
+  vec2 s1p = vec2(uv.x + wob * 0.65,     uv.y - g * 0.78 - headPull * 0.65);
+  vec2 s2p = vec2(uv.x + wob * 0.30,     uv.y - g * 0.52 - headPull * 0.30);
+  vec2 s3p = vec2(uv.x + wob * 0.12,     uv.y - g * 0.30);
 
-  // clamp sampling so drips can render outside the logo bounds
-  vec4 c0 = texture2D(u_logo, clamp(s0, 0.0, 1.0));
-  vec4 c1 = texture2D(u_logo, clamp(s1, 0.0, 1.0));
-  vec4 c2 = texture2D(u_logo, clamp(s2, 0.0, 1.0));
-  vec4 c3 = texture2D(u_logo, clamp(s3, 0.0, 1.0));
+  // Avoid edge-clamp smearing: treat out-of-bounds samples as transparent.
+  vec4 c0 = sampleLogoSafe(u_logo, s0p);
+  vec4 c1 = sampleLogoSafe(u_logo, s1p);
+  vec4 c2 = sampleLogoSafe(u_logo, s2p);
+  vec4 c3 = sampleLogoSafe(u_logo, s3p);
 
-  vec4 tex = c0 * 0.58 + c1 * 0.22 + c2 * 0.13 + c3 * 0.07;
+  // Reduce "echo" ghosting of the logo in the melt.
+  vec4 tex = c0 * 0.85 + c1 * 0.10 + c2 * 0.04 + c3 * 0.01;
 
-  vec4 l  = texture2D(u_logo, clamp(s0 + vec2(-widen, 0.0), 0.0, 1.0));
-  vec4 r  = texture2D(u_logo, clamp(s0 + vec2( widen, 0.0), 0.0, 1.0));
-  vec4 ll = texture2D(u_logo, clamp(s0 + vec2(-widen*2.0, 0.0), 0.0, 1.0));
-  vec4 rr = texture2D(u_logo, clamp(s0 + vec2( widen*2.0, 0.0), 0.0, 1.0));
+  vec4 l  = sampleLogoSafe(u_logo, s0p + vec2(-widen, 0.0));
+  vec4 r  = sampleLogoSafe(u_logo, s0p + vec2( widen, 0.0));
+  vec4 ll = sampleLogoSafe(u_logo, s0p + vec2(-widen*2.0, 0.0));
+  vec4 rr = sampleLogoSafe(u_logo, s0p + vec2( widen*2.0, 0.0));
 
   float thickMix = smoothstep(0.02, 0.55, g);
   tex = mix(tex, tex * 0.48 + (l + r) * 0.26 + (ll + rr) * 0.10, thickMix);
@@ -350,21 +408,27 @@ void main() {
   float baseKeep = inBounds ? (1.0 - meltAmt) : 0.0;
   vec4 baseOut = vec4(base.rgb * baseKeep, baseA * baseKeep);
 
-  float liquidAlpha = tex.a * meltAmt;
+  // Keep the logo core color (reference keeps it crisp/white); color comes from the melt + glow.
 
-  // colors
-  vec3 white = vec3(1.0);
-  vec3 neon  = vec3(1.0, 0.20, 0.70);
-  vec3 hot   = vec3(0.80, 0.06, 0.42);
-  vec3 deep  = vec3(0.20, 0.00, 0.10);
+  // Pixel dissolve: pixels disappear as melt completes.
+  // Keep finished state stable (no chunky dissolve). Leave a tiny micro-breakup only at the very end.
+  float pix = hash21(floor(uvC * 1400.0) + u_seed * 10.0);
+  float dissolve = smoothstep(0.985, 1.00, m) * smoothstep(0.85, 1.00, pr);
+  float keepPix = mix(1.0, smoothstep(dissolve - 0.02, dissolve + 0.02, pix), 0.10);
 
-  float heat1 = smoothstep(0.00, 0.25, g);
-  float heat2 = smoothstep(0.25, 0.95, g);
-  vec3 col1 = mix(white, neon, heat1);
-  vec3 col2 = mix(col1, hot, heat2);
-  vec3 wax  = mix(col2, deep, smoothstep(0.85, 1.10, g));
+  // Make the melt form into lanes (drips) instead of a full sheet.
+  // More negative space between drips (prevents end-state from becoming a solid sheet).
+  float laneCut = mix(0.35, 1.0, dripSel);
+  float liquidAlpha = tex.a * meltAmt * keepPix * laneCut;
 
-  float e = edgeAlpha(u_logo, s0, u_res);
+  // colors (pink-only liquid)
+  vec3 pinkA = vec3(1.0, 0.24, 0.70);
+  vec3 pinkB = vec3(1.0, 0.58, 0.92);
+
+  float heat = smoothstep(0.00, 1.00, g);
+  vec3 wax = mix(pinkB, pinkA, heat);
+
+  float e = edgeAlpha(u_logo, s0p, u_res);
   float edgeGlow = smoothstep(0.02, 0.22, e);
 
   float fresh = smoothstep(0.10, 0.55, m) * (1.0 - smoothstep(0.85, 1.05, m));
@@ -373,34 +437,66 @@ void main() {
   float glowAmt = (edgeGlow * 0.92 + headGlow * 0.85 + fresh * 0.35);
   glowAmt *= (0.32 + 1.22 * smoothstep(0.05, 0.92, g));
 
-  // simple specular sheen to make it feel wet
-  float spec = pow(smoothstep(0.10, 0.65, head) * smoothstep(0.08, 0.85, visc), 1.5);
-  spec *= (0.35 + 0.65 * smoothstep(0.10, 0.75, g));
-  spec *= (0.65 + 0.35 * sin(anim * 1.6 + uv.y * 10.0 + channel * 4.0));
+  // wet specular envelope (stable, less "sparkly")
+  float wet = pow(smoothstep(0.12, 0.70, head) * smoothstep(0.10, 0.90, visc), 1.25);
+  wet *= (0.35 + 0.65 * smoothstep(0.08, 0.85, g));
 
-  // emissive glow (not multiplied by alpha)
-  vec3 emissive = neon * glowAmt * 1.35 + hot * glowAmt * 0.75 + white * spec * 0.16;
+  float spec = (spec1 * 0.95 + spec2 * 0.55) * wet;
 
-  // Liquid inherits some of the source image color (keeps it recognizable) then warms up.
-  vec3 src = (tex.a > 0.0001) ? (tex.rgb / tex.a) : vec3(0.0);
+  // Melt-front band (used for hot rim + sheen). Needs to be defined before emissive.
+  float edge = smoothstep(0.02, 0.22, length(grad) * 5.0);
+  float frontBand = edge * smoothstep(0.06, 0.30, m) * (1.0 - smoothstep(0.55, 0.95, m));
+
+  // coverage gate keeps glow attached to the shape, but still lets a halo form
+  float coverage = clamp(baseA + liquidAlpha, 0.0, 1.0);
+  float covG = smoothstep(0.02, 0.28, coverage);
+
+  // reference-style look: hot white core at edges + magenta halo
+  float hotEdge = smoothstep(0.06, 0.22, e) * (0.35 + 0.65 * frontBand) * meltAmt;
+  // keep it from washing the whole sheet
+  hotEdge *= (0.25 + 0.75 * mBand);
+  vec3 hotCore = vec3(1.0) * hotEdge * 1.15;
+
+  vec3 magenta = mix(pinkA, pinkB, 0.55);
+  vec3 halo = magenta * glowAmt * (0.65 + 0.55 * fres) * meltAmt;
+  halo *= (0.22 + 0.78 * mBand);
+
+  // emissive stays pink-dominant; white is concentrated at the rim only
+  vec3 emissive = (halo + hotCore + pinkB * spec * 0.10) * covG;
+
+  // Liquid should stay pink (avoid white source-color bleeding).
 
   // subtle refraction (only in melted region)
   vec2 refr = nrm.xy * (0.007 + 0.020 * channel) * meltAmt;
-  vec4 refrS = texture2D(u_logo, clamp(uvC + refr, 0.0, 1.0));
+  vec4 refrS = sampleLogoSafe(u_logo, uvC + refr);
   vec3 refrSrc = (refrS.a > 0.0001) ? (refrS.rgb / refrS.a) : vec3(0.0);
 
-  vec3 srcMix = mix(src, refrSrc, 0.35 + 0.25 * fres);
-  vec3 srcTint = mix(srcMix, wax, 0.55 + 0.30 * smoothstep(0.10, 0.85, g));
-  vec3 body = srcTint * liquidAlpha;
+  // Use refraction only as a subtle brightness/detail signal, not as color.
+  float refrLum = dot(refrSrc, vec3(0.2126, 0.7152, 0.0722));
+  float detail = smoothstep(0.05, 0.95, refrLum);
+
+  // Reference look: keep a bright white core and let magenta live on edges/glow.
+  float thick = clamp(smoothstep(0.08, 0.95, m) * (0.40 + 0.60 * smoothstep(0.05, 0.85, g)) + head * 0.18, 0.0, 1.0);
+  float rim = pow(clamp(fres, 0.0, 1.0), 1.15);
+  float edgeTint = clamp(0.22 + 0.62 * rim + 0.28 * thick, 0.0, 1.0);
+
+  vec3 coreWhite = vec3(1.0);
+  vec3 edgePink = mix(pinkA, pinkB, 0.55);
+  vec3 bodyColor = mix(coreWhite, edgePink, edgeTint);
+
+  // slight lighting so the body doesn't feel flat, but never goes dark/purple
+  bodyColor *= (0.92 + 0.18 * ndl);
+  bodyColor *= (0.88 + 0.22 * detail);
+  vec3 body = bodyColor * liquidAlpha;
 
   // extra highlight for the melt front + wet sheen
-  float edge = smoothstep(0.02, 0.22, length(grad) * 5.0);
-  float frontBand = edge * smoothstep(0.06, 0.30, m) * (1.0 - smoothstep(0.55, 0.95, m));
-  vec3 sheen = (white * (0.08 + 0.18 * ndl) + neon * (0.12 + 0.40 * fres) + hot * (0.10 + 0.55 * specN));
-  sheen *= (0.18 + 0.82 * frontBand) * meltAmt;
+  vec3 sheen = (pinkB * (0.08 + 0.24 * ndl) + pinkB * (0.10 + 0.42 * fres) + pinkA * (0.10 + 0.70 * spec));
+  sheen *= (0.16 + 0.84 * frontBand) * meltAmt;
 
+  // Multiplicative grain avoids clamping-to-black speckles.
   float grain = (hash21(gl_FragCoord.xy + u_seed*100.0) - 0.5) * 0.02 * meltAmt;
-  vec3 rgb = baseOut.rgb + body + emissive * meltAmt + sheen + grain;
+  vec3 rgb = baseOut.rgb + body + emissive + sheen;
+  rgb *= (1.0 + grain);
 
   float outA = clamp(baseOut.a + liquidAlpha, 0.0, 1.0);
   gl_FragColor = vec4(rgb, outA);
@@ -421,6 +517,8 @@ varying vec2 v_uv;
 
 float hash21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 
+float luma(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
 vec3 tonemapFilmic(vec3 x){
   x = max(vec3(0.0), x);
   return (x*(2.51*x + 0.03)) / (x*(2.43*x + 0.59) + 0.14);
@@ -437,51 +535,73 @@ void main() {
     return;
   }
 
-  // subtle chromatic aberration
-  float aberr = 1.0 + 0.22 * pr * (hash21(vec2(u_seed, u_anim)) - 0.5);
-  vec2 off = px * aberr;
-
-  float r = texture2D(u_scene, uv + off).r;
-  float g = texture2D(u_scene, uv).g;
-  float b = texture2D(u_scene, uv - off).b;
-  vec3 base = vec3(r,g,b);
-
-  // bloom
-  vec3 blur =
-    texture2D(u_scene, uv + px*vec2(-2.0,-2.0)).rgb +
-    texture2D(u_scene, uv + px*vec2( 0.0,-2.0)).rgb +
-    texture2D(u_scene, uv + px*vec2( 2.0,-2.0)).rgb +
-    texture2D(u_scene, uv + px*vec2(-2.0, 0.0)).rgb +
-    texture2D(u_scene, uv + px*vec2( 0.0, 0.0)).rgb +
-    texture2D(u_scene, uv + px*vec2( 2.0, 0.0)).rgb +
-    texture2D(u_scene, uv + px*vec2(-2.0, 2.0)).rgb +
-    texture2D(u_scene, uv + px*vec2( 0.0, 2.0)).rgb +
-    texture2D(u_scene, uv + px*vec2( 2.0, 2.0)).rgb;
-
-  blur *= (1.0/9.0);
-
-  float luma = dot(base, vec3(0.2126, 0.7152, 0.0722));
-  float bloomMask = smoothstep(0.16, 0.50, luma);
-  vec3 bloom = blur * bloomMask * (1.20 + 1.20 * pr);
-
-  // vignette
+  // premium chromatic aberration: only towards edges (keeps center crisp)
   vec2 q = uv - 0.5;
-  float vig = smoothstep(0.98, 0.22, dot(q,q));
+  float r2 = dot(q, q);
+  float edgeW = smoothstep(0.08, 0.28, r2);
+  float jitter = (hash21(vec2(u_seed, u_anim)) - 0.5);
+  vec2 off = px * (0.65 + 2.2 * edgeW) * (0.25 * pr) * (0.85 + 0.30 * jitter);
+
+  float rr = texture2D(u_scene, uv + off).r;
+  float gg = texture2D(u_scene, uv).g;
+  float bb = texture2D(u_scene, uv - off).b;
+  vec3 base = vec3(rr, gg, bb);
+
+  // weighted bloom (soft knee threshold) for a more filmic highlight rolloff
+  vec3 c00 = texture2D(u_scene, uv).rgb;
+  vec3 c10 = texture2D(u_scene, uv + px*vec2( 1.5, 0.0)).rgb;
+  vec3 c_10 = texture2D(u_scene, uv + px*vec2(-1.5, 0.0)).rgb;
+  vec3 c01 = texture2D(u_scene, uv + px*vec2(0.0, 1.5)).rgb;
+  vec3 c0_1 = texture2D(u_scene, uv + px*vec2(0.0,-1.5)).rgb;
+  vec3 c11 = texture2D(u_scene, uv + px*vec2( 1.5, 1.5)).rgb;
+  vec3 c_11 = texture2D(u_scene, uv + px*vec2(-1.5, 1.5)).rgb;
+  vec3 c1_1 = texture2D(u_scene, uv + px*vec2( 1.5,-1.5)).rgb;
+  vec3 c_1_1 = texture2D(u_scene, uv + px*vec2(-1.5,-1.5)).rgb;
+
+  vec3 blur =
+    c00 * 0.204164 +
+    (c10 + c_10 + c01 + c0_1) * 0.123841 +
+    (c11 + c_11 + c1_1 + c_1_1) * 0.075113;
+
+  float lum = luma(base);
+  float threshold = 0.88;
+  float knee = 0.20;
+  float soft = clamp((lum - threshold + knee) / (2.0 * knee), 0.0, 1.0);
+  float bloomMask = soft * soft;
+  // Brighter bloom to make the white core + halo "pop" like the reference.
+  vec3 bloom = blur * bloomMask * (0.28 + 0.42 * pr);
+
+  // vignette (darkens edges only; keeps blacks black)
+  float vig = smoothstep(0.98, 0.22, r2);
   base *= vig;
 
-  // grain + micro flicker
-  float grain = (hash21(gl_FragCoord.xy + u_seed*100.0) - 0.5) * 0.040 * pr;
-  float flicker = (hash21(vec2(u_seed, u_seed*2.0 + u_anim)) - 0.5) * 0.012 * pr;
-
-  vec3 color = base + bloom * pr + grain + flicker;
+  // combine in linear, then tonemap
+  vec3 color = base + bloom;
+  // tiny exposure push without lifting blacks
+  color *= (1.02 + 0.02 * pr);
   color = tonemapFilmic(color);
 
-  gl_FragColor = vec4(color, 1.0);
+  // subtle saturation lift (premium) without shifting blacks
+  float l = luma(color);
+  vec3 gray = vec3(l);
+  color = mix(gray, color, 1.12);
+
+  // grain + micro flicker + very small dithering, gated by luma to avoid noisy blacks
+  float gate = smoothstep(0.02, 0.18, l);
+  float grain = (hash21(gl_FragCoord.xy + u_seed*100.0) - 0.5) * 0.030 * pr;
+  float flicker = (hash21(vec2(u_seed, u_seed*2.0 + u_anim)) - 0.5) * 0.010 * pr;
+  float dither = (hash21(gl_FragCoord.xy * 0.5 + vec2(u_seed, u_anim)) - 0.5) / 255.0;
+  color *= (1.0 + (grain + flicker) * gate);
+  color += dither * gate;
+
+  gl_FragColor = vec4(max(vec3(0.0), color), 1.0);
 }
 `;
 
 export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const holdRef = useRef<HTMLElement | null>(null);
+  const pinWrapRef = useRef<HTMLDivElement | null>(null);
 
   const shaders = useMemo(() => ({ VERT, MASK_FRAG, RENDER_FRAG, POST_FRAG }), []);
 
@@ -491,6 +611,9 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
     maskProg: null as WebGLProgram | null,
     renderProg: null as WebGLProgram | null,
     postProg: null as WebGLProgram | null,
+
+    blitProg: null as WebGLProgram | null,
+    bu_tex: null as WebGLUniformLocation | null,
 
     logoTex: null as WebGLTexture | null,
 
@@ -537,6 +660,8 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
     loaded: false,
     seed: Math.random() * 1000,
     ro: null as ResizeObserver | null,
+    lastLayoutW: 0,
+    lastLayoutH: 0,
   });
 
   const loop = () => {
@@ -548,7 +673,8 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
     const anim = (performance.now() - s.t0) * 0.001;
 
     // slower smoothing = thicker feel
-    s.p += (s.target - s.p) * 0.040;
+    // heavier syrup: slower response to scroll
+    s.p += (s.target - s.p) * 0.026;
     const timeVal = Math.max(0, Math.min(1.25, s.p));
     const progress01 = Math.max(0, Math.min(1, timeVal));
 
@@ -652,11 +778,13 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
     const maskProg = createProgram(gl, shaders.VERT, shaders.MASK_FRAG);
     const renderProg = createProgram(gl, shaders.VERT, shaders.RENDER_FRAG);
     const postProg = createProgram(gl, shaders.VERT, shaders.POST_FRAG);
-    if (!maskProg || !renderProg || !postProg) return;
+    const blitProg = createProgram(gl, shaders.VERT, BLIT_FRAG);
+    if (!maskProg || !renderProg || !postProg || !blitProg) return;
 
     s.maskProg = maskProg;
     s.renderProg = renderProg;
     s.postProg = postProg;
+    s.blitProg = blitProg;
 
     // big triangle
     const buffer = gl.createBuffer();
@@ -675,6 +803,10 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
     const a2 = gl.getAttribLocation(postProg, "a_pos");
     gl.enableVertexAttribArray(a2);
     gl.vertexAttribPointer(a2, 2, gl.FLOAT, false, 0, 0);
+
+    const a3 = gl.getAttribLocation(blitProg, "a_pos");
+    gl.enableVertexAttribArray(a3);
+    gl.vertexAttribPointer(a3, 2, gl.FLOAT, false, 0, 0);
 
     // uniforms mask
     s.mu_logo = gl.getUniformLocation(maskProg, "u_logo");
@@ -701,10 +833,23 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
     s.pu_seed = gl.getUniformLocation(postProg, "u_seed");
     s.pu_progress = gl.getUniformLocation(postProg, "u_progress");
 
+    s.bu_tex = gl.getUniformLocation(blitProg, "u_tex");
+
     const resize = () => {
       if (!canvas.parentElement) return;
       const rect = canvas.parentElement.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      // Prevent mask/scene buffer resets during scroll on mobile (address bar / viewport height changes).
+      // Only resize when width changes, or when height changes a lot (orientation/layout shift).
+      const prevW = s.lastLayoutW;
+      const prevH = s.lastLayoutH;
+      const wDelta = Math.abs(rect.width - prevW);
+      const hDelta = Math.abs(rect.height - prevH);
+      const meaningful = prevW === 0 || prevH === 0 || wDelta > 1 || hDelta > 160;
+      if (!meaningful) return;
+      s.lastLayoutW = rect.width;
+      s.lastLayoutH = rect.height;
 
       canvas.width = Math.max(1, Math.floor(rect.width * dpr));
       canvas.height = Math.max(1, Math.floor(rect.height * dpr));
@@ -714,28 +859,52 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
       const W = canvas.width;
       const H = canvas.height;
 
-      // mask ping-pong
-      if (s.maskTexA) gl.deleteTexture(s.maskTexA);
-      if (s.maskTexB) gl.deleteTexture(s.maskTexB);
-      if (s.fbA) gl.deleteFramebuffer(s.fbA);
-      if (s.fbB) gl.deleteFramebuffer(s.fbB);
+      const oldMaskTexA = s.maskTexA;
+      const oldMaskTexB = s.maskTexB;
+      const oldFbA = s.fbA;
+      const oldFbB = s.fbB;
+      const oldPing = s.ping;
+      const oldCurrentMask = oldPing === 0 ? oldMaskTexA : oldMaskTexB;
 
-      s.maskTexA = makeTex(gl, W, H);
-      s.maskTexB = makeTex(gl, W, H);
-      if (s.maskTexA) s.fbA = attachFB(gl, s.maskTexA);
-      if (s.maskTexB) s.fbB = attachFB(gl, s.maskTexB);
+      // allocate new mask ping-pong
+      const newMaskTexA = makeTex(gl, W, H);
+      const newMaskTexB = makeTex(gl, W, H);
+      const newFbA = newMaskTexA ? attachFB(gl, newMaskTexA) : null;
+      const newFbB = newMaskTexB ? attachFB(gl, newMaskTexB) : null;
 
-      // clear masks to 0
-      if (s.fbA && s.fbB) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, s.fbA);
+      // If melt has started, preserve mask across resize so it doesn't "restart".
+      const shouldPreserve = !!oldCurrentMask && s.p > 0.01 && !!s.blitProg && !!s.bu_tex;
+      if (newFbA && newFbB) {
         gl.viewport(0, 0, W, H);
-        gl.clearColor(0, 0, 0, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.disable(gl.BLEND);
+        if (shouldPreserve) {
+          gl.useProgram(s.blitProg);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, oldCurrentMask);
+          gl.uniform1i(s.bu_tex!, 0);
 
-        gl.bindFramebuffer(gl.FRAMEBUFFER, s.fbB);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, newFbA);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+          gl.bindFramebuffer(gl.FRAMEBUFFER, newFbB);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        } else {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, newFbA);
+          gl.clearColor(0, 0, 0, 1);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, newFbB);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
       }
+
+      // swap in new mask resources
+      s.maskTexA = newMaskTexA;
+      s.maskTexB = newMaskTexB;
+      s.fbA = newFbA;
+      s.fbB = newFbB;
 
       // scene buffer
       if (s.sceneTex) gl.deleteTexture(s.sceneTex);
@@ -745,6 +914,12 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
       if (s.sceneTex) s.sceneFB = attachFB(gl, s.sceneTex);
 
       s.ping = 0;
+
+      // delete old mask resources after we've potentially copied from them
+      if (oldMaskTexA) gl.deleteTexture(oldMaskTexA);
+      if (oldMaskTexB) gl.deleteTexture(oldMaskTexB);
+      if (oldFbA) gl.deleteFramebuffer(oldFbA);
+      if (oldFbB) gl.deleteFramebuffer(oldFbB);
     };
 
     s.ro = new ResizeObserver(() => resize());
@@ -807,9 +982,61 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
     // scroll mapping
     const onScroll = () => {
       const vh = window.innerHeight || 1;
-      const start = vh * 0.02; // deadzone so it stays perfectly still on load
-      s.target = Math.max(0, window.scrollY - start) / (vh * 0.9);
-      onScrolledChange?.(window.scrollY > 10);
+      const el = holdRef.current;
+      const pinWrap = pinWrapRef.current;
+
+      if (!el) {
+        const start = vh * 0.02;
+        s.target = Math.max(0, window.scrollY - start) / (vh * 0.9);
+        onScrolledChange?.(window.scrollY > 10);
+        return;
+      }
+
+      // Pin behavior: keep the hero perfectly on-screen for the whole section.
+      // - fixed while the section spans the viewport
+      // - absolute before/after so it participates in normal layout
+      if (pinWrap) {
+        const rect = el.getBoundingClientRect();
+        const within = rect.top <= 0 && rect.bottom >= vh;
+        if (within) {
+          pinWrap.style.position = "fixed";
+          pinWrap.style.top = "0px";
+          pinWrap.style.left = "0px";
+          pinWrap.style.right = "0px";
+        } else if (rect.top > 0) {
+          pinWrap.style.position = "absolute";
+          pinWrap.style.top = "0px";
+          pinWrap.style.left = "0px";
+          pinWrap.style.right = "0px";
+        } else {
+          const topPx = Math.max(0, el.offsetHeight - vh);
+          pinWrap.style.position = "absolute";
+          pinWrap.style.top = `${topPx}px`;
+          pinWrap.style.left = "0px";
+          pinWrap.style.right = "0px";
+        }
+      }
+
+      const rect = el.getBoundingClientRect();
+      const total = Math.max(1, el.offsetHeight - vh);
+      const raw = Math.max(0, Math.min(1, -rect.top / total));
+
+      // small deadzone so initial load is perfectly still
+      const start = 0.02;
+      const afterDeadzone = Math.max(0, raw - start) / Math.max(0.0001, 1 - start);
+
+      // Keep the hero pinned for the whole section:
+      // - short dwell (no melt)
+      // - run the melt over only part of the scroll
+      // - hold the completed look visible until the hero ends
+      const dwell = 0.10;
+      const animSpan = 0.42;
+      const t = (afterDeadzone - dwell) / Math.max(0.0001, animSpan);
+      const p = Math.max(0, Math.min(1, t));
+
+      // drive the melt a bit past 1 for richer drips
+      s.target = p * 1.25;
+      onScrolledChange?.(afterDeadzone > 0.001);
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -841,8 +1068,9 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
 
   return (
     <section
+      ref={holdRef}
       style={{
-        height: "100vh",
+        height: "180vh",
         width: "100%",
         background: "#000",
         position: "relative",
@@ -850,25 +1078,41 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
       }}
     >
       <div
+        ref={pinWrapRef}
         style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "100vh",
           width: "100%",
-          height: "100%",
-          maxWidth: "2000px",
-          margin: "0 auto",
+          background: "#000",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <canvas
-          ref={canvasRef}
+        <div
           style={{
             width: "100%",
             height: "100%",
-            display: "block",
-            pointerEvents: "none",
+            maxWidth: "2000px",
+            margin: "0 auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
-        />
+        >
+          <canvas
+            ref={canvasRef}
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "block",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
       </div>
     </section>
   );
