@@ -1,25 +1,24 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 type HeroProps = {
-  imageSrc: string; // Ensure this points to your SVG
+  imageSrc: string;
   onScrolledChange?: (scrolled: boolean) => void;
 };
 
-// --- Shader Compilation Helpers ---
-
+/* ---------------- WebGL helpers ---------------- */
 function createShader(gl: WebGLRenderingContext, type: number, src: string) {
-  const shader = gl.createShader(type);
-  if (!shader) return null;
-  gl.shaderSource(shader, src);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.error("Shader compile error:", gl.getShaderInfoLog(shader));
-    gl.deleteShader(shader);
+  const sh = gl.createShader(type);
+  if (!sh) return null;
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    console.error("Shader compile error:", gl.getShaderInfoLog(sh));
+    gl.deleteShader(sh);
     return null;
   }
-  return shader;
+  return sh;
 }
 
 function createProgram(gl: WebGLRenderingContext, vs: string, fs: string) {
@@ -33,311 +32,812 @@ function createProgram(gl: WebGLRenderingContext, vs: string, fs: string) {
   gl.linkProgram(p);
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
     console.error("Program link error:", gl.getProgramInfoLog(p));
+    gl.deleteProgram(p);
     return null;
   }
   return p;
 }
 
-// --- THE SHADERS ---
+function makeTex(gl: WebGLRenderingContext, w: number, h: number) {
+  const t = gl.createTexture();
+  if (!t) return null;
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  return t;
+}
 
-const VERTEX_SHADER = `
+function attachFB(gl: WebGLRenderingContext, tex: WebGLTexture) {
+  const fb = gl.createFramebuffer();
+  if (!fb) return null;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return fb;
+}
+
+/* ---------------- Shaders ---------------- */
+const VERT = `
 attribute vec2 a_pos;
 varying vec2 v_uv;
 void main() {
-  // Map -1..1 space to 0..1 UV space
   v_uv = a_pos * 0.5 + 0.5;
   gl_Position = vec4(a_pos, 0.0, 1.0);
 }
 `;
 
-/**
- * THE "VISCOUS GLOW" FRAGMENT SHADER
- * This is where the magic happens to match your reference image.
- */
-const FRAGMENT_SHADER = `
+// PASS 1: monotonic melt mask (once melted never comes back)
+const MASK_FRAG = `
 precision highp float;
 
-uniform sampler2D u_tex;
-uniform vec2 u_res;      // Canvas Resolution
-uniform vec2 u_imgRes;   // Image Resolution
-uniform float u_time;    // Scroll Progress (0.0 - 1.0ish)
+uniform sampler2D u_logo;
+uniform sampler2D u_prevMask;
+uniform vec2 u_res;
+uniform vec2 u_imgRes;
+uniform float u_time;
+uniform float u_anim;
+uniform float u_seed;
 
 varying vec2 v_uv;
 
-// --- Noise functions for organic variation ---
-float hash(float n) { return fract(sin(n) * 43758.5453123); }
-float noise(vec2 x) {
-    vec2 p = floor(x);
-    vec2 f = fract(x);
-    f = f*f*(3.0-2.0*f);
-    float n = p.x + p.y*57.0;
-    return mix(mix( hash(n+ 0.0), hash(n+ 1.0),f.x),
-               mix( hash(n+57.0), hash(n+58.0),f.x),f.y);
+float hash21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float noise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  f = f*f*(3.0-2.0*f);
+  float a = hash21(i + vec2(0.0,0.0));
+  float b = hash21(i + vec2(1.0,0.0));
+  float c = hash21(i + vec2(0.0,1.0));
+  float d = hash21(i + vec2(1.0,1.0));
+  return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+}
+
+// slightly smoother noise for flow
+float fbm(vec2 p){
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 4; i++) {
+    v += a * noise(p);
+    p *= 2.02;
+    a *= 0.5;
+  }
+  return v;
+}
+
+// cheap curl-ish flow field (finite differences on fbm)
+vec2 flowField(vec2 p){
+  float e = 0.18;
+  float n1 = fbm(p + vec2(e, 0.0));
+  float n2 = fbm(p - vec2(e, 0.0));
+  float n3 = fbm(p + vec2(0.0, e));
+  float n4 = fbm(p - vec2(0.0, e));
+  vec2 g = vec2(n1 - n2, n3 - n4);
+  // rotate gradient for a divergence-free-ish look
+  vec2 f = vec2(g.y, -g.x);
+  float l = max(0.001, length(f));
+  return f / l;
+}
+
+vec2 aspectFitUV(vec2 uv, vec2 canvasPx, vec2 imgPx){
+  float ca = canvasPx.x / canvasPx.y;
+  float ia = imgPx.x / imgPx.y;
+  vec2 scale = vec2(1.0);
+  if (ia > ca) scale.y = ca / ia;
+  else scale.x = ia / ca;
+  return (uv - 0.5) * scale + 0.5;
 }
 
 void main() {
-    // 1. Aspect Ratio Correction (Fit the image properly)
-    float canvasAspect = u_res.x / u_res.y;
-    float imgAspect = u_imgRes.x / u_imgRes.y;
-    vec2 ratio = vec2(min((canvasAspect / imgAspect), 1.0), min((imgAspect / canvasAspect), 1.0));
-    vec2 pUV = vec2((v_uv.x - 0.5) * ratio.x + 0.5, (v_uv.y - 0.5) * ratio.y + 0.5);
+  vec2 uv = aspectFitUV(v_uv, u_res, u_imgRes);
 
-    // 2. Physics Setup
-    float progress = u_time; 
-    // Gravity accelerates non-linearly feels heavier
-    float gravityBase = pow(progress, 1.8) * 1.5; 
+  // previous mask with a tiny downward advection to create "drips"
+  float prev0 = texture2D(u_prevMask, v_uv).r;
+  float anim = u_anim;
+  float p = clamp(u_time, 0.0, 1.25);
+  // slightly slower, more controllable progression
+  float t = pow(p, 2.15);
 
-    // 3. Columnar Viscosity (The Drip Effect)
-    // We create vertical "channels" of varying speeds based on X position and noise.
-    // High frequency noise creates thin drips, low freq creates thick ones.
-    float dripColumn = noise(vec2(pUV.x * 15.0, progress * 2.0)); // Main drips
-    float fineDetail = noise(vec2(pUV.x * 50.0, progress * 5.0)); // Tiny rivulets
+  // per-column micro delay so it doesn't melt "all at once"
+  float laneDelay = (fbm(vec2(uv.x * 4.2 + u_seed, 12.7)) - 0.5) * 0.22;
+  float tt = clamp(t - laneDelay, 0.0, 1.25);
+  // flow strength increases as melt progresses
+  float flowStrength = (0.0005 + 0.0060 * smoothstep(0.06, 0.95, tt));
+  float flowLane = smoothstep(0.10, 0.90, fbm(vec2(uv.x * 7.0 + u_seed, anim * 0.10)));
+  vec2 ff = flowField(vec2(uv.x * 2.2 + u_seed * 0.07, uv.y * 2.2 + anim * 0.10));
+  float flowX = ff.x * flowStrength * (0.30 + 0.70 * flowLane);
+  float flowY = (abs(ff.y) * 0.55 + 0.45) * flowStrength * (0.55 + 0.65 * flowLane);
+  // sample slightly above to pull mask down over time (monotonic via max)
+  float carried = texture2D(u_prevMask, v_uv + vec2(-flowX, flowY)).r;
+  float prev = max(prev0, carried * 0.997);
 
-    // Combine noise to get total drip velocity factor for this vertical slice
-    float dripFactor = smoothstep(0.3, 0.8, dripColumn) * 0.8 + fineDetail * 0.2;
-    
-    // Calculate how far down this pixel should move.
-    // We multiply by UV.y so the bottom melts faster than the top.
-    float displacement = gravityBase * (0.5 + dripFactor * 1.5) * (0.2 + pUV.y * 0.8);
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+    gl_FragColor = vec4(prev, 0.0, 0.0, 1.0);
+    return;
+  }
 
-    // 4. Horizontal Wobble (Liquid tension as it falls)
-    float wobble = sin(pUV.y * 20.0 + progress * 10.0) * (displacement * 0.02);
+  float a0 = texture2D(u_logo, uv).a;
+  if (a0 < 0.001) {
+    gl_FragColor = vec4(prev, 0.0, 0.0, 1.0);
+    return;
+  }
 
-    // 5. Sampling Coordinate (Look UP to move pixels DOWN)
-    vec2 sampleUV = vec2(pUV.x + wobble, pUV.y + displacement);
+  vec2 px = 1.0 / u_res;
 
-    // 6. Fetch Texture & Boundary Check
-    vec4 texColor = vec4(0.0);
-    // Only sample if within bounds, otherwise transparent
-    if (sampleUV.y >= 0.0 && sampleUV.y <= 1.0 && sampleUV.x >= 0.0 && sampleUV.x <= 1.0) {
-        texColor = texture2D(u_tex, sampleUV);
-    }
+  // shape-aware bottom edge
+  float aBelow = texture2D(u_logo, uv - vec2(0.0, px.y * 2.0)).a;
+  float bottomEdge = clamp(a0 - aBelow, 0.0, 1.0);
+  bottomEdge = smoothstep(0.02, 0.22, bottomEdge);
 
-    // 7. Tearing / Thinning
-    // If displacement is huge, the ink thins out and breaks.
-    float thinning = smoothstep(1.2, 0.6, displacement * (1.0 - dripFactor*0.5));
-    float finalAlpha = texColor.a * thinning;
+  // heavier easing feels more viscous
 
-    // 8. Color Mapping (The Glow Effect)
-    // We map the color based on how far the pixel has moved (displacement).
-    
-    vec3 colSolid = vec3(1.0, 1.0, 1.0);           // Pure White (Solid)
-    vec3 colGlow  = vec3(0.8, 0.0, 1.0);           // Neon Purple/Pink (Melting edge)
-    vec3 colDark  = vec3(0.15, 0.0, 0.25);         // Dark viscous liquid (Falling)
+  // bottom-first
+  // progress front (bottom first) but wavy and staggered
+  float frontWob = (fbm(vec2(uv.x * 2.8 + u_seed, 0.6 + anim * 0.10)) - 0.5) * 0.24;
+  float bottomFirst = smoothstep(0.00, 0.45, tt - uv.y * 1.22 - frontWob);
 
-    // Mix white to glow based on initial movement
-    vec3 rgb = mix(colSolid, colGlow, smoothstep(0.0, 0.15, displacement));
-    // Mix glow to dark based on heavy movement
-    rgb = mix(rgb, colDark, smoothstep(0.15, 0.6, displacement));
+  // x drip lanes (slowly evolving so lanes feel alive)
+  float lane = smoothstep(0.16, 0.94, fbm(vec2(uv.x * 7.5 + u_seed, 0.20 + anim * 0.07)));
+  float micro = noise(vec2(uv.x * 85.0 + u_seed, tt * 2.6 + anim * 0.35));
+  float channel = mix(lane, micro, 0.20);
 
-    // Final composite
-    gl_FragColor = vec4(rgb * finalAlpha, finalAlpha);
+  // globs at bottom edges
+  float globN = noise(vec2(uv.x * 18.0 + u_seed, 4.0));
+  float globMask = smoothstep(0.60, 0.92, globN) * bottomEdge;
+
+  float visc = smoothstep(0.10, 0.70, tt) * (0.55 + 0.45 * channel);
+
+  float edgeBoost = 0.10 + 3.25 * bottomEdge;
+  // a touch of "heat shimmer" in when melt starts
+  float shimmer = (noise(vec2(uv.x * 10.0 + u_seed, anim * 0.75 + uv.y * 3.0)) - 0.5);
+  float newMelt =
+    (0.05 + 0.98 * tt) *
+    bottomFirst *
+    edgeBoost *
+    (0.60 + 0.40 * channel) *
+    (1.0 + shimmer * 0.04 * smoothstep(0.05, 0.40, tt));
+
+  newMelt += globMask * visc * (0.12 + 0.25 * tt);
+
+  // let accumulated mask keep creeping downward (still monotonic)
+  float creep = smoothstep(0.25, 1.05, tt) * flowLane * 0.06;
+  float next = max(prev, clamp(newMelt + prev * creep, 0.0, 1.0));
+  gl_FragColor = vec4(next, 0.0, 0.0, 1.0);
 }
 `;
 
-// --- React Component ---
+// PASS 2: render thick slow glowing liquid using the mask
+const RENDER_FRAG = `
+precision highp float;
+
+uniform sampler2D u_logo;
+uniform sampler2D u_mask;
+uniform vec2  u_res;
+uniform vec2  u_imgRes;
+uniform float u_anim;
+uniform float u_seed;
+uniform float u_progress;
+
+varying vec2 v_uv;
+
+float hash21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float noise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  f = f*f*(3.0-2.0*f);
+  float a = hash21(i + vec2(0.0,0.0));
+  float b = hash21(i + vec2(1.0,0.0));
+  float c = hash21(i + vec2(0.0,1.0));
+  float d = hash21(i + vec2(1.0,1.0));
+  return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+}
+
+float fbm(vec2 p){
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 4; i++) {
+    v += a * noise(p);
+    p *= 2.02;
+    a *= 0.5;
+  }
+  return v;
+}
+
+vec2 flowField(vec2 p){
+  float e = 0.18;
+  float n1 = fbm(p + vec2(e, 0.0));
+  float n2 = fbm(p - vec2(e, 0.0));
+  float n3 = fbm(p + vec2(0.0, e));
+  float n4 = fbm(p - vec2(0.0, e));
+  vec2 g = vec2(n1 - n2, n3 - n4);
+  vec2 f = vec2(g.y, -g.x);
+  float l = max(0.001, length(f));
+  return f / l;
+}
+
+vec2 aspectFitUV(vec2 uv, vec2 canvasPx, vec2 imgPx){
+  float ca = canvasPx.x / canvasPx.y;
+  float ia = imgPx.x / imgPx.y;
+  vec2 scale = vec2(1.0);
+  if (ia > ca) scale.y = ca / ia;
+  else scale.x = ia / ca;
+  return (uv - 0.5) * scale + 0.5;
+}
+
+float edgeAlpha(sampler2D tex, vec2 uv, vec2 res){
+  vec2 px = 1.0 / res;
+  float a  = texture2D(tex, uv).a;
+  float ax = texture2D(tex, uv + vec2(px.x,0.0)).a;
+  float ay = texture2D(tex, uv + vec2(0.0,px.y)).a;
+  return abs(a-ax) + abs(a-ay);
+}
+
+void main() {
+  float m = texture2D(u_mask, v_uv).r;
+  vec2 uv = aspectFitUV(v_uv, u_res, u_imgRes);
+
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { gl_FragColor = vec4(0.0); return; }
+
+  vec4 base = texture2D(u_logo, uv);
+  float baseA = base.a;
+  if (baseA < 0.001 && m < 0.001) { gl_FragColor = vec4(0.0); return; }
+
+  // At rest: keep image pixel-perfect.
+  float pr = clamp(u_progress, 0.0, 1.0);
+  float meltAmt = smoothstep(0.02, 0.85, m) * pr;
+
+  float anim = u_anim;
+  float lane = smoothstep(0.16, 0.94, noise(vec2(uv.x * 8.5 + u_seed, 0.22 + anim * 0.08)));
+  float micro = noise(vec2(uv.x * 78.0 + u_seed, m * 2.7 + 3.0 + anim * 0.22));
+  float channel = mix(lane, micro, 0.20);
+
+  float visc = smoothstep(0.10, 0.75, m) * (0.55 + 0.45 * channel);
+
+  // slow heavy fall (adds a touch of animated ooze)
+  float ooze = (noise(vec2(uv.x * 6.0 + u_seed, anim * 0.25 + uv.y * 2.0)) - 0.5);
+  float g = m * (0.10 + 1.12 * channel) * (0.55 + 0.45 * visc);
+  g *= (1.0 + ooze * 0.06 * smoothstep(0.08, 0.75, m));
+
+  float widen = smoothstep(0.04, 0.70, g) * (0.0030 + 0.030 * (0.35 + 0.65 * channel));
+  widen *= (0.70 + 0.70 * smoothstep(0.25, 0.95, m));
+
+  vec2 ff = flowField(vec2(uv.x * 2.0 + u_seed * 0.09, uv.y * 2.0 + anim * 0.10));
+  float wob = (ff.x * 0.85 + ff.y * 0.35) * (0.0010 + 0.016 * visc) * meltAmt;
+  wob += sin(uv.y * 18.0 + m * 6.0 + channel * 5.0 + anim * 0.9) * (0.0006 + 0.010 * visc) * meltAmt;
+
+  float head = smoothstep(0.15, 0.85, m) * (0.35 + 0.65 * channel);
+  float headPull = head * (0.02 + 0.18 * m);
+
+  vec2 s0 = vec2(uv.x + wob,            uv.y + g + headPull);
+  vec2 s1 = vec2(uv.x + wob * 0.65,     uv.y + g * 0.78 + headPull * 0.65);
+  vec2 s2 = vec2(uv.x + wob * 0.30,     uv.y + g * 0.52 + headPull * 0.30);
+  vec2 s3 = vec2(uv.x + wob * 0.12,     uv.y + g * 0.30);
+
+  vec4 c0 = texture2D(u_logo, s0);
+  vec4 c1 = texture2D(u_logo, s1);
+  vec4 c2 = texture2D(u_logo, s2);
+  vec4 c3 = texture2D(u_logo, s3);
+
+  vec4 tex = c0 * 0.58 + c1 * 0.22 + c2 * 0.13 + c3 * 0.07;
+
+  vec4 l  = texture2D(u_logo, s0 + vec2(-widen, 0.0));
+  vec4 r  = texture2D(u_logo, s0 + vec2( widen, 0.0));
+  vec4 ll = texture2D(u_logo, s0 + vec2(-widen*2.0, 0.0));
+  vec4 rr = texture2D(u_logo, s0 + vec2( widen*2.0, 0.0));
+
+  float thickMix = smoothstep(0.02, 0.55, g);
+  tex = mix(tex, tex * 0.48 + (l + r) * 0.26 + (ll + rr) * 0.10, thickMix);
+
+  // Keep the original image sharp above the melt.
+  float baseKeep = 1.0 - meltAmt;
+  vec4 baseOut = vec4(base.rgb * baseKeep, baseA * baseKeep);
+
+  float liquidAlpha = tex.a * meltAmt;
+
+  // colors
+  vec3 white = vec3(1.0);
+  vec3 neon  = vec3(1.0, 0.20, 0.70);
+  vec3 hot   = vec3(0.80, 0.06, 0.42);
+  vec3 deep  = vec3(0.20, 0.00, 0.10);
+
+  float heat1 = smoothstep(0.00, 0.25, g);
+  float heat2 = smoothstep(0.25, 0.95, g);
+  vec3 col1 = mix(white, neon, heat1);
+  vec3 col2 = mix(col1, hot, heat2);
+  vec3 wax  = mix(col2, deep, smoothstep(0.85, 1.10, g));
+
+  float e = edgeAlpha(u_logo, s0, u_res);
+  float edgeGlow = smoothstep(0.02, 0.22, e);
+
+  float fresh = smoothstep(0.10, 0.55, m) * (1.0 - smoothstep(0.85, 1.05, m));
+  float headGlow = head * (0.35 + 0.65 * smoothstep(0.15, 0.60, g));
+
+  float glowAmt = (edgeGlow * 0.92 + headGlow * 0.85 + fresh * 0.35);
+  glowAmt *= (0.32 + 1.22 * smoothstep(0.05, 0.92, g));
+
+  // simple specular sheen to make it feel wet
+  float spec = pow(smoothstep(0.10, 0.65, head) * smoothstep(0.08, 0.85, visc), 1.5);
+  spec *= (0.35 + 0.65 * smoothstep(0.10, 0.75, g));
+  spec *= (0.65 + 0.35 * sin(anim * 1.6 + uv.y * 10.0 + channel * 4.0));
+
+  // emissive glow (not multiplied by alpha)
+  vec3 emissive = neon * glowAmt * 1.35 + hot * glowAmt * 0.75 + white * spec * 0.16;
+
+  // Liquid inherits some of the source image color (keeps it recognizable) then warms up.
+  vec3 src = (tex.a > 0.0001) ? (tex.rgb / tex.a) : vec3(0.0);
+  vec3 srcTint = mix(src, wax, 0.55 + 0.30 * smoothstep(0.10, 0.85, g));
+  vec3 body = srcTint * liquidAlpha;
+
+  float grain = (hash21(gl_FragCoord.xy + u_seed*100.0) - 0.5) * 0.02 * meltAmt;
+  vec3 rgb = baseOut.rgb + body + emissive * meltAmt + grain;
+
+  float outA = clamp(baseOut.a + liquidAlpha, 0.0, 1.0);
+  gl_FragColor = vec4(rgb, outA);
+}
+`;
+
+// PASS 3: cinematic post
+const POST_FRAG = `
+precision highp float;
+
+uniform sampler2D u_scene;
+uniform vec2 u_res;
+uniform float u_anim;
+uniform float u_seed;
+uniform float u_progress;
+
+varying vec2 v_uv;
+
+float hash21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+
+vec3 tonemapFilmic(vec3 x){
+  x = max(vec3(0.0), x);
+  return (x*(2.51*x + 0.03)) / (x*(2.43*x + 0.59) + 0.14);
+}
+
+void main() {
+  vec2 uv = v_uv;
+  vec2 px = 1.0 / u_res;
+
+  // No post at rest: keep the image exactly as rendered.
+  float pr = clamp(u_progress, 0.0, 1.0);
+  if (pr < 0.0001) {
+    gl_FragColor = texture2D(u_scene, uv);
+    return;
+  }
+
+  // subtle chromatic aberration
+  float aberr = 1.0 + 0.22 * pr * (hash21(vec2(u_seed, u_anim)) - 0.5);
+  vec2 off = px * aberr;
+
+  float r = texture2D(u_scene, uv + off).r;
+  float g = texture2D(u_scene, uv).g;
+  float b = texture2D(u_scene, uv - off).b;
+  vec3 base = vec3(r,g,b);
+
+  // bloom
+  vec3 blur =
+    texture2D(u_scene, uv + px*vec2(-2.0,-2.0)).rgb +
+    texture2D(u_scene, uv + px*vec2( 0.0,-2.0)).rgb +
+    texture2D(u_scene, uv + px*vec2( 2.0,-2.0)).rgb +
+    texture2D(u_scene, uv + px*vec2(-2.0, 0.0)).rgb +
+    texture2D(u_scene, uv + px*vec2( 0.0, 0.0)).rgb +
+    texture2D(u_scene, uv + px*vec2( 2.0, 0.0)).rgb +
+    texture2D(u_scene, uv + px*vec2(-2.0, 2.0)).rgb +
+    texture2D(u_scene, uv + px*vec2( 0.0, 2.0)).rgb +
+    texture2D(u_scene, uv + px*vec2( 2.0, 2.0)).rgb;
+
+  blur *= (1.0/9.0);
+
+  float luma = dot(base, vec3(0.2126, 0.7152, 0.0722));
+  float bloomMask = smoothstep(0.16, 0.50, luma);
+  vec3 bloom = blur * bloomMask * (1.20 + 1.20 * pr);
+
+  // vignette
+  vec2 q = uv - 0.5;
+  float vig = smoothstep(0.98, 0.22, dot(q,q));
+  base *= vig;
+
+  // grain + micro flicker
+  float grain = (hash21(gl_FragCoord.xy + u_seed*100.0) - 0.5) * 0.040 * pr;
+  float flicker = (hash21(vec2(u_seed, u_seed*2.0 + u_anim)) - 0.5) * 0.012 * pr;
+
+  vec3 color = base + bloom * pr + grain + flicker;
+  color = tonemapFilmic(color);
+
+  gl_FragColor = vec4(color, 1.0);
+}
+`;
 
 export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  // Using refs to hold mutable WebGL state without triggering re-renders
-  const state = useRef({
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const shaders = useMemo(() => ({ VERT, MASK_FRAG, RENDER_FRAG, POST_FRAG }), []);
+
+  const S = useRef({
     gl: null as WebGLRenderingContext | null,
-    prog: null as WebGLProgram | null,
-    tex: null as WebGLTexture | null,
-    rafId: 0,
-    scrollProgress: 0,    // Current smoothed scroll value
-    targetProgress: 0,    // Where the scroll wants to be
+
+    maskProg: null as WebGLProgram | null,
+    renderProg: null as WebGLProgram | null,
+    postProg: null as WebGLProgram | null,
+
+    logoTex: null as WebGLTexture | null,
+
+    maskTexA: null as WebGLTexture | null,
+    maskTexB: null as WebGLTexture | null,
+    fbA: null as WebGLFramebuffer | null,
+    fbB: null as WebGLFramebuffer | null,
+    ping: 0,
+
+    sceneTex: null as WebGLTexture | null,
+    sceneFB: null as WebGLFramebuffer | null,
+
+    // uniforms mask
+    mu_logo: null as WebGLUniformLocation | null,
+    mu_prevMask: null as WebGLUniformLocation | null,
+    mu_res: null as WebGLUniformLocation | null,
+    mu_imgRes: null as WebGLUniformLocation | null,
+    mu_time: null as WebGLUniformLocation | null,
+    mu_anim: null as WebGLUniformLocation | null,
+    mu_seed: null as WebGLUniformLocation | null,
+
+    // uniforms render
+    ru_logo: null as WebGLUniformLocation | null,
+    ru_mask: null as WebGLUniformLocation | null,
+    ru_res: null as WebGLUniformLocation | null,
+    ru_imgRes: null as WebGLUniformLocation | null,
+    ru_anim: null as WebGLUniformLocation | null,
+    ru_seed: null as WebGLUniformLocation | null,
+    ru_progress: null as WebGLUniformLocation | null,
+
+    // uniforms post
+    pu_scene: null as WebGLUniformLocation | null,
+    pu_res: null as WebGLUniformLocation | null,
+    pu_anim: null as WebGLUniformLocation | null,
+    pu_seed: null as WebGLUniformLocation | null,
+    pu_progress: null as WebGLUniformLocation | null,
+
+    raf: 0,
+    p: 0,
+    target: 0,
+    t0: 0,
     imgW: 1,
     imgH: 1,
-    isLoaded: false
+    loaded: false,
+    seed: Math.random() * 1000,
+    ro: null as ResizeObserver | null,
   });
 
-  // --- The Animation Loop ---
-  const renderFrame = () => {
-    const { gl, prog, isLoaded, scrollProgress, targetProgress, imgW, imgH } = state.current;
+  const loop = () => {
+    const s = S.current;
+    const gl = s.gl;
     const canvas = canvasRef.current;
-    if (!gl || !prog || !isLoaded || !canvas) return;
+    if (!gl || !canvas || !s.loaded || !s.maskProg || !s.renderProg || !s.postProg) return;
 
-    // 1. Physics Lerp (Smoothing)
-    // 0.07 defines the "heaviness". Lower = slower, more viscous feel.
-    state.current.scrollProgress += (targetProgress - scrollProgress) * 0.07;
+    const anim = (performance.now() - s.t0) * 0.001;
 
-    // Optimization: Stop the loop if the animation is settled
-    const diff = Math.abs(state.current.scrollProgress - targetProgress);
-    if (diff > 0.0005 || (state.current.scrollProgress > 0.001 && state.current.scrollProgress < 0.999)) {
-       state.current.rafId = requestAnimationFrame(renderFrame);
-    }
+    // slower smoothing = thicker feel
+    s.p += (s.target - s.p) * 0.040;
+    const timeVal = Math.max(0, Math.min(1.25, s.p));
+    const progress01 = Math.max(0, Math.min(1, timeVal));
 
-    // Clamp progress between 0 and slight overshot for effect
-    const p = Math.max(0.0, Math.min(1.1, state.current.scrollProgress));
+    const W = gl.drawingBufferWidth;
+    const H = gl.drawingBufferHeight;
 
-    // 2. Draw
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-    gl.clearColor(0, 0, 0, 0); // Transparent clear
+    const prevMask = s.ping === 0 ? s.maskTexA : s.maskTexB;
+    const nextMask = s.ping === 0 ? s.maskTexB : s.maskTexA;
+    const nextFB = s.ping === 0 ? s.fbB : s.fbA;
+
+    // PASS 1: update mask
+    gl.bindFramebuffer(gl.FRAMEBUFFER, nextFB);
+    gl.viewport(0, 0, W, H);
+    gl.disable(gl.BLEND);
+    gl.useProgram(s.maskProg);
+
+    gl.uniform2f(s.mu_res, W, H);
+    gl.uniform2f(s.mu_imgRes, s.imgW, s.imgH);
+    gl.uniform1f(s.mu_time, timeVal);
+    if (s.mu_anim) gl.uniform1f(s.mu_anim, anim);
+    gl.uniform1f(s.mu_seed, s.seed);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, s.logoTex);
+    gl.uniform1i(s.mu_logo, 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, prevMask);
+    gl.uniform1i(s.mu_prevMask, 1);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    // PASS 2: render wax to scene buffer
+    gl.bindFramebuffer(gl.FRAMEBUFFER, s.sceneFB);
+    gl.viewport(0, 0, W, H);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.useProgram(prog);
 
-    // Update Uniforms
-    gl.uniform1f(gl.getUniformLocation(prog, "u_time"), p);
-    gl.uniform2f(gl.getUniformLocation(prog, "u_res"), gl.canvas.width, gl.canvas.height);
-    gl.uniform2f(gl.getUniformLocation(prog, "u_imgRes"), imgW, imgH);
+    gl.useProgram(s.renderProg);
+    gl.uniform2f(s.ru_res, W, H);
+    gl.uniform2f(s.ru_imgRes, s.imgW, s.imgH);
+    if (s.ru_anim) gl.uniform1f(s.ru_anim, anim);
+    gl.uniform1f(s.ru_seed, s.seed);
+    if (s.ru_progress) gl.uniform1f(s.ru_progress, progress01);
 
-    // Draw fullscreen quad (2 triangles = 6 vertices)
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, s.logoTex);
+    gl.uniform1i(s.ru_logo, 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, nextMask);
+    gl.uniform1i(s.ru_mask, 1);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    // PASS 3: post to screen
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, W, H);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.useProgram(s.postProg);
+    gl.uniform2f(s.pu_res, W, H);
+    if (s.pu_anim) gl.uniform1f(s.pu_anim, anim);
+    gl.uniform1f(s.pu_seed, s.seed + timeVal * 10.0);
+    if (s.pu_progress) gl.uniform1f(s.pu_progress, progress01);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, s.sceneTex);
+    gl.uniform1i(s.pu_scene, 0);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    s.ping = 1 - s.ping;
+    s.raf = requestAnimationFrame(loop);
   };
 
-  // --- Setup WebGL & Load Image ---
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // 1. Init WebGL Context
-    const gl = canvas.getContext("webgl", { 
-      alpha: true, 
-      premultipliedAlpha: true, 
-      antialias: false // Turn off AA for sharper pixel art look if desired
+    const gl = canvas.getContext("webgl", {
+      alpha: false,
+      premultipliedAlpha: true,
+      antialias: false,
+      powerPreference: "high-performance",
     });
-    if (!gl) { console.error("WebGL not supported"); return; }
-    state.current.gl = gl;
 
-    // 2. Compile & Link Shader Program
-    const prog = createProgram(gl, VERTEX_SHADER, FRAGMENT_SHADER);
-    if (!prog) return;
-    state.current.prog = prog;
+    if (!gl) {
+      console.error("WebGL not supported");
+      return;
+    }
 
-    // 3. Create Geometry (Big Triangle filling screen)
-    // Using a big triangle instead of a quad is slightly more efficient
+    const s = S.current;
+    s.gl = gl;
+    s.t0 = performance.now();
+
+    const maskProg = createProgram(gl, shaders.VERT, shaders.MASK_FRAG);
+    const renderProg = createProgram(gl, shaders.VERT, shaders.RENDER_FRAG);
+    const postProg = createProgram(gl, shaders.VERT, shaders.POST_FRAG);
+    if (!maskProg || !renderProg || !postProg) return;
+
+    s.maskProg = maskProg;
+    s.renderProg = renderProg;
+    s.postProg = postProg;
+
+    // big triangle
     const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      -1.0, -1.0, 
-       3.0, -1.0, 
-      -1.0,  3.0
-    ]), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
 
-    const aPos = gl.getAttribLocation(prog, "a_pos");
-    gl.enableVertexAttribArray(aPos);
-    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+    // attributes for each program
+    const a0 = gl.getAttribLocation(maskProg, "a_pos");
+    gl.enableVertexAttribArray(a0);
+    gl.vertexAttribPointer(a0, 2, gl.FLOAT, false, 0, 0);
 
-    // 4. Texture Configuration
-    const tex = gl.createTexture();
-    state.current.tex = tex;
-    gl.bindTexture(gl.TEXTURE_2D, tex);
+    const a1 = gl.getAttribLocation(renderProg, "a_pos");
+    gl.enableVertexAttribArray(a1);
+    gl.vertexAttribPointer(a1, 2, gl.FLOAT, false, 0, 0);
 
-    // IMPORTANT: Flips the SVG right-side up
+    const a2 = gl.getAttribLocation(postProg, "a_pos");
+    gl.enableVertexAttribArray(a2);
+    gl.vertexAttribPointer(a2, 2, gl.FLOAT, false, 0, 0);
+
+    // uniforms mask
+    s.mu_logo = gl.getUniformLocation(maskProg, "u_logo");
+    s.mu_prevMask = gl.getUniformLocation(maskProg, "u_prevMask");
+    s.mu_res = gl.getUniformLocation(maskProg, "u_res");
+    s.mu_imgRes = gl.getUniformLocation(maskProg, "u_imgRes");
+    s.mu_time = gl.getUniformLocation(maskProg, "u_time");
+    s.mu_anim = gl.getUniformLocation(maskProg, "u_anim");
+    s.mu_seed = gl.getUniformLocation(maskProg, "u_seed");
+
+    // uniforms render
+    s.ru_logo = gl.getUniformLocation(renderProg, "u_logo");
+    s.ru_mask = gl.getUniformLocation(renderProg, "u_mask");
+    s.ru_res = gl.getUniformLocation(renderProg, "u_res");
+    s.ru_imgRes = gl.getUniformLocation(renderProg, "u_imgRes");
+    s.ru_anim = gl.getUniformLocation(renderProg, "u_anim");
+    s.ru_seed = gl.getUniformLocation(renderProg, "u_seed");
+    s.ru_progress = gl.getUniformLocation(renderProg, "u_progress");
+
+    // uniforms post
+    s.pu_scene = gl.getUniformLocation(postProg, "u_scene");
+    s.pu_res = gl.getUniformLocation(postProg, "u_res");
+    s.pu_anim = gl.getUniformLocation(postProg, "u_anim");
+    s.pu_seed = gl.getUniformLocation(postProg, "u_seed");
+    s.pu_progress = gl.getUniformLocation(postProg, "u_progress");
+
+    const resize = () => {
+      if (!canvas.parentElement) return;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+
+      const W = canvas.width;
+      const H = canvas.height;
+
+      // mask ping-pong
+      if (s.maskTexA) gl.deleteTexture(s.maskTexA);
+      if (s.maskTexB) gl.deleteTexture(s.maskTexB);
+      if (s.fbA) gl.deleteFramebuffer(s.fbA);
+      if (s.fbB) gl.deleteFramebuffer(s.fbB);
+
+      s.maskTexA = makeTex(gl, W, H);
+      s.maskTexB = makeTex(gl, W, H);
+      if (s.maskTexA) s.fbA = attachFB(gl, s.maskTexA);
+      if (s.maskTexB) s.fbB = attachFB(gl, s.maskTexB);
+
+      // clear masks to 0
+      if (s.fbA && s.fbB) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, s.fbA);
+        gl.viewport(0, 0, W, H);
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, s.fbB);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      }
+
+      // scene buffer
+      if (s.sceneTex) gl.deleteTexture(s.sceneTex);
+      if (s.sceneFB) gl.deleteFramebuffer(s.sceneFB);
+
+      s.sceneTex = makeTex(gl, W, H);
+      if (s.sceneTex) s.sceneFB = attachFB(gl, s.sceneTex);
+
+      s.ping = 0;
+    };
+
+    s.ro = new ResizeObserver(() => resize());
+    if (canvas.parentElement) s.ro.observe(canvas.parentElement);
+    resize();
+
+    // logo texture
+    const logoTex = gl.createTexture();
+    if (!logoTex) return;
+    s.logoTex = logoTex;
+
+    gl.bindTexture(gl.TEXTURE_2D, logoTex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-
-    // Texture filtering (Linear for smooth melting)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-    // Enable transparency blending
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-
-    // 5. Load the SVG Image
+    // load image (SVG/PNG), rasterize to hi-res
     const img = new Image();
-    img.crossOrigin = "anonymous"; // Needed if SVG is external
+    img.crossOrigin = "anonymous";
     img.src = imageSrc;
+
     img.onload = () => {
-      // Update state with image dimensions
-      state.current.imgW = img.naturalWidth || 1000;
-      state.current.imgH = img.naturalHeight || 1000;
-      state.current.isLoaded = true;
+      // Keep it crisp: never upscale, but allow higher ceiling for large hero images.
+      const MAX = 4096;
+      const iw = img.naturalWidth || 1024;
+      const ih = img.naturalHeight || 1024;
+      const sc = Math.min(1, Math.min(MAX / iw, MAX / ih));
+      const w = Math.max(1, Math.floor(iw * sc));
+      const h = Math.max(1, Math.floor(ih * sc));
 
-      // Upload image data to GPU texture
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-      
-      // Start the render loop
-      renderFrame();
+      const off = document.createElement("canvas");
+      off.width = w;
+      off.height = h;
+      const ctx = off.getContext("2d");
+
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        s.imgW = w;
+        s.imgH = h;
+        gl.bindTexture(gl.TEXTURE_2D, logoTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, off);
+      } else {
+        s.imgW = iw;
+        s.imgH = ih;
+        gl.bindTexture(gl.TEXTURE_2D, logoTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      }
+
+      s.loaded = true;
+      cancelAnimationFrame(s.raf);
+      s.raf = requestAnimationFrame(loop);
     };
 
-    // --- Event Listeners ---
-
-    const handleScroll = () => {
-       const scrollY = window.scrollY;
-       const vh = window.innerHeight;
-       onScrolledChange?.(scrollY > 50);
-
-       // Calculate melt progress based on viewport height.
-       // Divided by vh*0.9 means it fully melts just before one full screen scroll.
-       const rawProgress = scrollY / (vh * 0.9);
-       state.current.targetProgress = rawProgress;
-       
-       // Wake up the animation loop if it was sleeping
-       cancelAnimationFrame(state.current.rafId);
-       state.current.rafId = requestAnimationFrame(renderFrame);
-    };
-    
-    const handleResize = () => {
-        if(!canvas.parentElement || !gl) return;
-        // Handle High-DPI displays
-        const dpr = Math.min(window.devicePixelRatio, 2); 
-        const width = canvas.parentElement.clientWidth;
-        const height = canvas.parentElement.clientHeight;
-        
-        canvas.width = width * dpr;
-        canvas.height = height * dpr;
-        
-        // Force a re-render
-        renderFrame();
+    // scroll mapping
+    const onScroll = () => {
+      const vh = window.innerHeight || 1;
+      s.target = window.scrollY / (vh * 0.9);
+      onScrolledChange?.(window.scrollY > 10);
     };
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", handleResize);
-    // Initial sizing
-    handleResize();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
 
-    // Cleanup on unmount
     return () => {
-        window.removeEventListener("scroll", handleScroll);
-        window.removeEventListener("resize", handleResize);
-        cancelAnimationFrame(state.current.rafId);
-        // Optional WebGL cleanup
-        gl.deleteProgram(prog);
-        gl.deleteTexture(tex);
+      window.removeEventListener("scroll", onScroll);
+      if (s.ro) s.ro.disconnect();
+      cancelAnimationFrame(s.raf);
+
+      try {
+        if (s.logoTex) gl.deleteTexture(s.logoTex);
+
+        if (s.maskTexA) gl.deleteTexture(s.maskTexA);
+        if (s.maskTexB) gl.deleteTexture(s.maskTexB);
+        if (s.fbA) gl.deleteFramebuffer(s.fbA);
+        if (s.fbB) gl.deleteFramebuffer(s.fbB);
+
+        if (s.sceneTex) gl.deleteTexture(s.sceneTex);
+        if (s.sceneFB) gl.deleteFramebuffer(s.sceneFB);
+
+        if (s.maskProg) gl.deleteProgram(s.maskProg);
+        if (s.renderProg) gl.deleteProgram(s.renderProg);
+        if (s.postProg) gl.deleteProgram(s.postProg);
+      } catch {}
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageSrc]); // Re-run setup if imageSrc changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageSrc, shaders.VERT, shaders.MASK_FRAG, shaders.RENDER_FRAG, shaders.POST_FRAG]);
 
   return (
-    <div 
-        style={{ 
-            height: '100vh', 
-            width: '100%', 
-            background: '#000', // Matches your high-contrast aesthetic
-            position: 'relative',
-            overflow: 'hidden'
-        }}
+    <section
+      style={{
+        height: "100vh",
+        width: "100%",
+        background: "#000",
+        position: "relative",
+        overflow: "hidden",
+      }}
     >
-      <div 
-        style={{ 
-            width: '100%', 
-            height: '100%', 
-            // Limits max size for ultra-wide screens so logo doesn't get too huge
-            maxWidth: '2000px', 
-            margin: '0 auto',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          maxWidth: "2000px",
+          margin: "0 auto",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-         <canvas 
-            ref={canvasRef} 
-            style={{ 
-                width: '100%', 
-                height: '100%', 
-                display: 'block',
-                // Ensures canvas doesn't intercept scroll events
-                pointerEvents: 'none' 
-            }} 
-         />
+        <canvas
+          ref={canvasRef}
+          style={{
+            width: "100%",
+            height: "100%",
+            display: "block",
+            pointerEvents: "none",
+          }}
+        />
       </div>
-    </div>
+    </section>
   );
 }
