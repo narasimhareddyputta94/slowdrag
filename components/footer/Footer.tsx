@@ -2,7 +2,8 @@
 
 import React from "react";
 
-const ICON = "#FFFFFF"; // ✅ make icons white
+// ✅ SETTING: Icon color set to Black
+const ICON = "#000000"; 
 
 /* swap these with your real URLs */
 const LINKS = {
@@ -25,8 +26,12 @@ function Tile({
     <a
       href={href}
       aria-label={label}
-      className="inline-flex h-12 w-12 items-center justify-center rounded-[10px] bg-white shadow-[0_1px_0_rgba(0,0,0,0.18)] transition hover:-translate-y-[1px] active:translate-y-0"
-      style={{ WebkitTapHighlightColor: "transparent" }}
+      // Tile Size: h-16 w-16 (64px)
+      className="inline-flex h-16 w-16 items-center justify-center rounded-[12px] bg-white shadow-[0_1px_0_rgba(0,0,0,0.18)] transition hover:-translate-y-[1px] active:translate-y-0"
+      style={{ 
+        WebkitTapHighlightColor: "transparent",
+        backgroundColor: "white" 
+      }}
     >
       {children}
     </a>
@@ -35,7 +40,7 @@ function Tile({
 
 function Instagram() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="block h-6 w-6">
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: '36px', height: '36px', display: 'block' }}>
       <rect
         x="3.2"
         y="3.2"
@@ -54,7 +59,7 @@ function Instagram() {
 
 function XIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="block h-6 w-6">
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: '36px', height: '36px', display: 'block' }}>
       <path d="M6 18L18 6" stroke={ICON} strokeWidth="2" strokeLinecap="round" />
       <path
         d="M8 6h5l5 6.8V18h-5L8 11.2V6Z"
@@ -69,7 +74,7 @@ function XIcon() {
 
 function Facebook() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="block h-6 w-6">
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: '36px', height: '36px', display: 'block' }}>
       <path
         d="M14 8.7V7.1c0-1 .8-1.8 1.8-1.8h1.9V2.8h-2.5c-2.6 0-4.7 2.1-4.7 4.7v1.2H8.6v2.7h1.9V21h3v-9.6h2.8l.6-2.7H13.5Z"
         fill={ICON}
@@ -98,9 +103,14 @@ export default function Footer() {
                 />
               </div>
 
+              {/* ✅ MODIFIED BUTTON */}
               <a
                 href={LINKS.contact}
-                className="inline-flex items-center justify-center rounded-full border border-black/70 px-8 py-3 text-[12px] tracking-[0.28em] text-[#071f1e] transition hover:bg-black/10"
+                // Changes made:
+                // 1. mb-10: Pushes the button up
+                // 2. px-12 py-5: Makes button bigger
+                // 3. text-[14px]: Increases text size
+                className="mb-10 inline-flex items-center justify-center rounded-full border border-black/70 px-12 py-5 text-[18px] tracking-[0.28em] text-[#071f1e] transition hover:bg-black/10 padding: 10px 24px; active:scale-95"
               >
                 CONTACT&nbsp;US
               </a>
@@ -109,7 +119,7 @@ export default function Footer() {
             {/* BOX 2 */}
             <div className="flex min-h-[420px] items-center justify-center px-14">
               <div className="text-center">
-                <div className="text-[12px] tracking-[0.34em]">SOCIALS</div>
+                <div className="text-[16px] tracking-[0.34em]">SOCIALS</div>
                 <div className="mx-auto mt-2 h-[2px] w-[62px] bg-white/90" />
 
                 <div className="mt-6 flex items-center justify-center gap-4">
