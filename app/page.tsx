@@ -5,6 +5,9 @@ import Hero from "@/components/hero/Hero";
 import Navbar from "@/components/nav/Navbar";
 import Manifesto from "@/components/sections/Manifesto";
 import FilmsShowcase from "@/components/sections/FilmsShowcase";
+import Manifesto2 from "@/components/sections/Manifesto2";
+import DesignsShowcase from "@/components/sections/DesignsShowcase";
+import Footer from "@/components/footer/Footer";
 
 export default function Home() {
   const [showNav, setShowNav] = useState(false);
@@ -18,6 +21,10 @@ export default function Home() {
       <Manifesto />
 
       <FilmsShowcase />
+      <Manifesto2/>
+      <DesignsShowcase />
+
+      <Footer />
     </main>
   );
 }
