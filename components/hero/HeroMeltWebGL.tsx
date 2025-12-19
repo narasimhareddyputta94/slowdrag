@@ -276,11 +276,13 @@ void main() {
   float m = texture2D(u_mask, v_uv).r;
   vec2 uv = aspectFitUV(v_uv, u_res, u_imgRes);
 
-  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { gl_FragColor = vec4(0.0); return; }
+  bool inBounds = !(uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0);
+  vec2 uvC = clamp(uv, 0.0, 1.0);
 
-  vec4 base = texture2D(u_logo, uv);
+  vec4 base = inBounds ? texture2D(u_logo, uv) : vec4(0.0);
   float baseA = base.a;
-  if (baseA < 0.001 && m < 0.001) { gl_FragColor = vec4(0.0); return; }
+  // If we're out of bounds, still allow mask-driven drips to show.
+  if (!inBounds && m < 0.001) { gl_FragColor = vec4(0.0); return; }
 
   // At rest: keep image pixel-perfect.
   float pr = clamp(u_progress, 0.0, 1.0);
@@ -308,28 +310,44 @@ void main() {
   float head = smoothstep(0.15, 0.85, m) * (0.35 + 0.65 * channel);
   float headPull = head * (0.02 + 0.18 * m);
 
+  // Mask gradient -> fake surface normal (for rim/specular + refraction)
+  vec2 px = 1.0 / u_res;
+  float mL = texture2D(u_mask, v_uv - vec2(px.x, 0.0)).r;
+  float mR = texture2D(u_mask, v_uv + vec2(px.x, 0.0)).r;
+  float mD = texture2D(u_mask, v_uv - vec2(0.0, px.y)).r;
+  float mU = texture2D(u_mask, v_uv + vec2(0.0, px.y)).r;
+  vec2 grad = vec2(mR - mL, mU - mD);
+  vec3 nrm = normalize(vec3(-grad * 2.8, 1.0));
+  vec3 viewDir = vec3(0.0, 0.0, 1.0);
+  vec3 lightDir = normalize(vec3(-0.35, 0.55, 0.75));
+  float ndl = clamp(dot(nrm, lightDir), 0.0, 1.0);
+  vec3 h = normalize(lightDir + viewDir);
+  float specN = pow(clamp(dot(nrm, h), 0.0, 1.0), 26.0);
+  float fres = pow(1.0 - clamp(dot(nrm, viewDir), 0.0, 1.0), 2.2);
+
   vec2 s0 = vec2(uv.x + wob,            uv.y + g + headPull);
   vec2 s1 = vec2(uv.x + wob * 0.65,     uv.y + g * 0.78 + headPull * 0.65);
   vec2 s2 = vec2(uv.x + wob * 0.30,     uv.y + g * 0.52 + headPull * 0.30);
   vec2 s3 = vec2(uv.x + wob * 0.12,     uv.y + g * 0.30);
 
-  vec4 c0 = texture2D(u_logo, s0);
-  vec4 c1 = texture2D(u_logo, s1);
-  vec4 c2 = texture2D(u_logo, s2);
-  vec4 c3 = texture2D(u_logo, s3);
+  // clamp sampling so drips can render outside the logo bounds
+  vec4 c0 = texture2D(u_logo, clamp(s0, 0.0, 1.0));
+  vec4 c1 = texture2D(u_logo, clamp(s1, 0.0, 1.0));
+  vec4 c2 = texture2D(u_logo, clamp(s2, 0.0, 1.0));
+  vec4 c3 = texture2D(u_logo, clamp(s3, 0.0, 1.0));
 
   vec4 tex = c0 * 0.58 + c1 * 0.22 + c2 * 0.13 + c3 * 0.07;
 
-  vec4 l  = texture2D(u_logo, s0 + vec2(-widen, 0.0));
-  vec4 r  = texture2D(u_logo, s0 + vec2( widen, 0.0));
-  vec4 ll = texture2D(u_logo, s0 + vec2(-widen*2.0, 0.0));
-  vec4 rr = texture2D(u_logo, s0 + vec2( widen*2.0, 0.0));
+  vec4 l  = texture2D(u_logo, clamp(s0 + vec2(-widen, 0.0), 0.0, 1.0));
+  vec4 r  = texture2D(u_logo, clamp(s0 + vec2( widen, 0.0), 0.0, 1.0));
+  vec4 ll = texture2D(u_logo, clamp(s0 + vec2(-widen*2.0, 0.0), 0.0, 1.0));
+  vec4 rr = texture2D(u_logo, clamp(s0 + vec2( widen*2.0, 0.0), 0.0, 1.0));
 
   float thickMix = smoothstep(0.02, 0.55, g);
   tex = mix(tex, tex * 0.48 + (l + r) * 0.26 + (ll + rr) * 0.10, thickMix);
 
   // Keep the original image sharp above the melt.
-  float baseKeep = 1.0 - meltAmt;
+  float baseKeep = inBounds ? (1.0 - meltAmt) : 0.0;
   vec4 baseOut = vec4(base.rgb * baseKeep, baseA * baseKeep);
 
   float liquidAlpha = tex.a * meltAmt;
@@ -365,11 +383,24 @@ void main() {
 
   // Liquid inherits some of the source image color (keeps it recognizable) then warms up.
   vec3 src = (tex.a > 0.0001) ? (tex.rgb / tex.a) : vec3(0.0);
-  vec3 srcTint = mix(src, wax, 0.55 + 0.30 * smoothstep(0.10, 0.85, g));
+
+  // subtle refraction (only in melted region)
+  vec2 refr = nrm.xy * (0.007 + 0.020 * channel) * meltAmt;
+  vec4 refrS = texture2D(u_logo, clamp(uvC + refr, 0.0, 1.0));
+  vec3 refrSrc = (refrS.a > 0.0001) ? (refrS.rgb / refrS.a) : vec3(0.0);
+
+  vec3 srcMix = mix(src, refrSrc, 0.35 + 0.25 * fres);
+  vec3 srcTint = mix(srcMix, wax, 0.55 + 0.30 * smoothstep(0.10, 0.85, g));
   vec3 body = srcTint * liquidAlpha;
 
+  // extra highlight for the melt front + wet sheen
+  float edge = smoothstep(0.02, 0.22, length(grad) * 5.0);
+  float frontBand = edge * smoothstep(0.06, 0.30, m) * (1.0 - smoothstep(0.55, 0.95, m));
+  vec3 sheen = (white * (0.08 + 0.18 * ndl) + neon * (0.12 + 0.40 * fres) + hot * (0.10 + 0.55 * specN));
+  sheen *= (0.18 + 0.82 * frontBand) * meltAmt;
+
   float grain = (hash21(gl_FragCoord.xy + u_seed*100.0) - 0.5) * 0.02 * meltAmt;
-  vec3 rgb = baseOut.rgb + body + emissive * meltAmt + grain;
+  vec3 rgb = baseOut.rgb + body + emissive * meltAmt + sheen + grain;
 
   float outA = clamp(baseOut.a + liquidAlpha, 0.0, 1.0);
   gl_FragColor = vec4(rgb, outA);
@@ -776,7 +807,8 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange }: HeroProps)
     // scroll mapping
     const onScroll = () => {
       const vh = window.innerHeight || 1;
-      s.target = window.scrollY / (vh * 0.9);
+      const start = vh * 0.02; // deadzone so it stays perfectly still on load
+      s.target = Math.max(0, window.scrollY - start) / (vh * 0.9);
       onScrolledChange?.(window.scrollY > 10);
     };
 
