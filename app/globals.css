@@ -14,7 +14,4 @@ body {
 }
 
 
-/* Footer icon safety: prevent global resets from hiding SVGs */
-footer svg { display: block !important; width: auto; height: auto; }
-footer a { display: inline-flex; }
 

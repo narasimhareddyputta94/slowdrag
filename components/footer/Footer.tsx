@@ -25,7 +25,7 @@ function Tile({
     <a
       href={href}
       aria-label={label}
-      className="inline-flex h-12 w-12 items-center justify-center rounded-[10px] shadow-[0_1px_0_rgba(0,0,0,0.18)] transition hover:-translate-y-[1px] active:translate-y-0"
+      className="inline-flex h-12 w-12 items-center justify-center rounded-[10px] bg-white shadow-[0_1px_0_rgba(0,0,0,0.18)] transition hover:-translate-y-[1px] active:translate-y-0"
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
       {children}
@@ -82,7 +82,7 @@ export default function Footer() {
   return (
     <footer
       className="w-full text-white"
-      style={{ backgroundColor: "#128277", fontFamily: "var(--font-offbit)", padding: "20px 0" }}
+      style={{ backgroundColor: "#128277", fontFamily: "var(--font-offbit)" }}
     >
       <div className="mx-auto max-w-[1400px] px-10 md:px-16">
         <div className="overflow-x-auto">
@@ -100,7 +100,7 @@ export default function Footer() {
 
               <a
                 href={LINKS.contact}
-                className="inline-flex items-center justify-center rounded-full border border-black/70 px-8 py-3 text-[16px] tracking-[0.28em] text-[#071f1e] transition hover:bg-black/10" 
+                className="inline-flex items-center justify-center rounded-full border border-black/70 px-8 py-3 text-[12px] tracking-[0.28em] text-[#071f1e] transition hover:bg-black/10"
               >
                 CONTACT&nbsp;US
               </a>
