@@ -7,12 +7,12 @@ export default function Manifesto2() {
     <section
       aria-label="Manifesto2"
       style={{
-        minHeight: "100vh",
+        minHeight: "70vh",
         background: "#000",
         color: "#eaeaea",
         display: "grid",
         placeItems: "center",
-        padding: "120px 24px",
+        padding: 0,
       }}
     >
       <div
