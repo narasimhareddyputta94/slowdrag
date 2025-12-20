@@ -8,6 +8,64 @@ type FilmItem = {
   poster?: string;
 };
 
+function CenterPlayButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Play video"
+      className="group relative grid size-20 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
+    >
+      <img
+        src="/images/play2.png"
+        alt=""
+        className="relative z-10 h-12 w-12 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
+      />
+    </button>
+  );
+}
+
+function ControlButton({
+  label,
+  pressed,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={pressed}
+      className="group relative grid size-12 place-items-center rounded-full bg-black/35 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/45 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+      style={{
+        boxShadow: "0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)",
+      }}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
+      />
+      <span
+        aria-hidden
+        className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80"
+      />
+      <span
+        aria-hidden
+        className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md"
+      />
+      <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.05]">
+        {children}
+      </span>
+    </button>
+  );
+}
+
 export default function FilmsShowcase() {
   const brandColor = "#c6376c";
   const tealColor = "#6fe7d3";
@@ -127,58 +185,6 @@ export default function FilmsShowcase() {
     if (target?.closest?.("[data-player-control]")) return;
     pauseVideo();
   };
-
-  const CenterPlayButton = ({ onClick }: { onClick: () => void }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Play video"
-      className="group relative grid size-20 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
-    >
-      <img
-        src="/images/play2.png"
-        alt=""
-        className="relative z-10 h-12 w-12 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
-      />
-    </button>
-  );
-
-  const ControlButton = ({
-    label,
-    pressed,
-    onClick,
-    children,
-  }: {
-    label: string;
-    pressed: boolean;
-    onClick: () => void;
-    children: React.ReactNode;
-  }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      aria-pressed={pressed}
-      className="group relative grid size-12 place-items-center rounded-full bg-black/35 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/45 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-      style={{
-        boxShadow: `0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)`,
-      }}
-    >
-      <span
-        aria-hidden
-        className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
-      />
-      <span
-        aria-hidden
-        className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80"
-      />
-      <span
-        aria-hidden
-        className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md"
-      />
-      <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.05]">{children}</span>
-    </button>
-  );
 
   const shapePath = `
     M 120,120
@@ -306,7 +312,6 @@ export default function FilmsShowcase() {
                       display: "block",
                       opacity: videoOpacity,
                       transition: "opacity 280ms ease",
-                      filter: "contrast(1.08) saturate(1.05)",
                     }}
                   />
                 ) : (
@@ -321,25 +326,8 @@ export default function FilmsShowcase() {
                     }}
                   />
                 )}
-
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    background:
-                      "radial-gradient(900px 560px at 55% 55%, rgba(0,0,0,0.0), rgba(0,0,0,0.55))",
-                    pointerEvents: "none",
-                  }}
-                />
               </div>
             </foreignObject>
-
-            <g clipPath="url(#blob-clip)">
-              <rect width="1000" height="600" fill="url(#grad1)" style={{ mixBlendMode: "screen" }} />
-              <rect width="1000" height="600" fill="url(#grad2)" style={{ mixBlendMode: "screen" }} />
-              <rect width="1000" height="600" fill="url(#grad3)" style={{ mixBlendMode: "screen" }} />
-              <rect width="1000" height="600" filter="url(#noise)" style={{ mixBlendMode: "overlay" }} />
-            </g>
 
             <path d={shapePath} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
           </svg>

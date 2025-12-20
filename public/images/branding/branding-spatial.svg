@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="900" x2="1600" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#07070A"/>
+      <stop offset="0.5" stop-color="#111019"/>
+      <stop offset="1" stop-color="#07070A"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(980 420) rotate(-10) scale(760 520)">
+      <stop offset="0" stop-color="#6FE7D3" stop-opacity="0.70"/>
+      <stop offset="0.55" stop-color="#2F6BEA" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#glow)"/>
+
+  <!-- 3D-ish blocks / signage -->
+  <g opacity="0.95">
+    <path d="M260 610 L520 480 L840 540 L580 670 Z" fill="#0E0E14" stroke="#FFFFFF" stroke-opacity="0.12"/>
+    <path d="M520 480 L520 350 L840 410 L840 540 Z" fill="#141321" stroke="#6FE7D3" stroke-opacity="0.35"/>
+    <path d="M260 610 L260 480 L520 350 L520 480 Z" fill="#0B0B10" stroke="#FFFFFF" stroke-opacity="0.10"/>
+
+    <path d="M880 640 L1080 520 L1360 560 L1160 680 Z" fill="#0E0E14" stroke="#FFFFFF" stroke-opacity="0.12"/>
+    <path d="M1080 520 L1080 390 L1360 430 L1360 560 Z" fill="#141321" stroke="#6FE7D3" stroke-opacity="0.35"/>
+    <path d="M880 640 L880 520 L1080 390 L1080 520 Z" fill="#0B0B10" stroke="#FFFFFF" stroke-opacity="0.10"/>
+
+    <rect x="220" y="210" width="420" height="90" rx="45" fill="#101019" stroke="#6FE7D3" stroke-opacity="0.55"/>
+    <text x="430" y="266" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="26" letter-spacing="6" fill="#FFFFFF" fill-opacity="0.88">WAYFINDING</text>
+
+    <rect x="980" y="220" width="460" height="90" rx="45" fill="#101019" stroke="#6FE7D3" stroke-opacity="0.55"/>
+    <text x="1210" y="276" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="26" letter-spacing="6" fill="#FFFFFF" fill-opacity="0.88">SIGNAGE</text>
+
+    <path d="M700 250 C 820 140, 1020 140, 1140 250" stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="4" fill="none"/>
+    <circle cx="920" cy="250" r="8" fill="#6FE7D3" fill-opacity="0.9"/>
+  </g>
+
+  <text x="130" y="105" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="28" letter-spacing="6" fill="#DBA9A9">SPATIAL BRANDING</text>
+  <text x="130" y="825" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="14" letter-spacing="3" fill="#FFFFFF" fill-opacity="0.55">ORIGINAL SVG PLACEHOLDER • SAFE TO SHIP</text>
+</svg>

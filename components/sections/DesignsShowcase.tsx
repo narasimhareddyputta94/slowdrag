@@ -10,26 +10,29 @@ type DesignItem = {
 export default function DesignsShowcase() {
   const designs: DesignItem[] = useMemo(
     () => [
-      { title: "Editorial", src: "" },
-      { title: "Spatial", src: "" },
-      { title: "Digital", src: "" },
+      { title: "Editorial", src: "/images/branding/branding-editorial.svg" },
+      { title: "Spatial", src: "/images/branding/branding-spatial.svg" },
+      { title: "Digital", src: "/images/branding/branding-digital.svg" },
     ],
     []
   );
 
   const [activeIndex, setActiveIndex] = useState(0);
 
+  const active = designs[activeIndex];
+  const hasImage = Boolean(active?.src);
+
   const next = () => setActiveIndex((i) => (i + 1) % designs.length);
   const prev = () =>
     setActiveIndex((i) => (i - 1 + designs.length) % designs.length);
 
-  
   const shapePath = `
     M 25,0
     L 600,0
     Q 625,0 625,25
-    L 625,80
-    Q 625,100 650,100
+    Q 625,50 650,50
+    Q 675,50 675,75
+    Q 675,100 700,100
     L 940,100
     Q 965,100 965,125
     L 965,300
@@ -73,27 +76,19 @@ export default function DesignsShowcase() {
 
   return (
     <section className="relative w-full min-h-screen bg-black text-white overflow-hidden flex items-center justify-center font-sans">
-      {/* Main Player Stage (WIDER like reference) */}
       <div className="relative w-[96%] md:w-[94%] lg:w-[90%] xl:w-[86%] max-w-[1500px] flex items-center justify-center">
-        {/* Aspect Ratio Box (SHORTER height like reference) */}
-        <div className="relative w-full aspect-[2.05/1] md:aspect-[2.0/1]">
-          {/* INVISIBLE MASK DEFINITION */}
-          <svg width="0" height="0" className="absolute">
-            <defs>
-              <clipPath id="blob-mask-design" clipPathUnits="objectBoundingBox">
-                {/* 1000 x 600 -> 1 x 1 mapping */}
-                <path transform="scale(0.001, 0.0016667)" d={shapePath} />
-              </clipPath>
-            </defs>
-          </svg>
-
-          {/* === THE SHAPE LAYER (WARM ORANGE THEME) === */}
+        <div className="relative w-full aspect-[2.05/1] md:aspect-[2.0/1] isolation-isolate">
+          {/* SVG layer */}
           <svg
             viewBox="0 0 1000 600"
-            className="w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)]"
+            className="w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] relative z-10 pointer-events-none"
             preserveAspectRatio="none"
           >
             <defs>
+              <clipPath id="blob-mask-design" clipPathUnits="userSpaceOnUse">
+                <path d={shapePath} />
+              </clipPath>
+
               <radialGradient
                 id="warm1"
                 cx="40%"
@@ -131,34 +126,45 @@ export default function DesignsShowcase() {
             </defs>
 
             <g>
-              <path d={shapePath} fill="#0a0500" />
-              <path
-                d={shapePath}
-                fill="url(#warm1)"
-                style={{ mixBlendMode: "screen" }}
-              />
-              <path
-                d={shapePath}
-                fill="url(#warm2)"
-                style={{ mixBlendMode: "screen" }}
-              />
-              <path
-                d={shapePath}
-                fill="url(#warm3)"
-                style={{ mixBlendMode: "screen" }}
-              />
-
-              {/* Grain Texture */}
-              <rect
-                width="100%"
-                height="100%"
-                filter="url(#noise-design)"
-                style={{ mixBlendMode: "overlay" }}
-                clipPath="url(#blob-mask-design)"
-              />
+              {hasImage ? (
+                <image
+                  href={active?.src}
+                  x={0}
+                  y={0}
+                  width={1000}
+                  height={600}
+                  preserveAspectRatio="xMidYMid slice"
+                  clipPath="url(#blob-mask-design)"
+                />
+              ) : (
+                <>
+                  <path d={shapePath} fill="#0a0500" />
+                  <path
+                    d={shapePath}
+                    fill="url(#warm1)"
+                    style={{ mixBlendMode: "screen" }}
+                  />
+                  <path
+                    d={shapePath}
+                    fill="url(#warm2)"
+                    style={{ mixBlendMode: "screen" }}
+                  />
+                  <path
+                    d={shapePath}
+                    fill="url(#warm3)"
+                    style={{ mixBlendMode: "screen" }}
+                  />
+                  <rect
+                    width="100%"
+                    height="100%"
+                    filter="url(#noise-design)"
+                    style={{ mixBlendMode: "overlay" }}
+                    clipPath="url(#blob-mask-design)"
+                  />
+                </>
+              )}
             </g>
 
-            {/* Border Stroke */}
             <path
               d={shapePath}
               fill="none"
@@ -169,32 +175,70 @@ export default function DesignsShowcase() {
 
           {/* === HUD INTERFACE === */}
 
-          {/* Top Right Pill */}
-          <div className="absolute top-[8%] right-[2.5%] z-30">
-            <div className="relative group">
-              <div className="absolute inset-0 bg-[#6fe7d3] blur-md opacity-20 group-hover:opacity-40 transition-opacity rounded-full" />
-              <button className="relative px-8 py-2 bg-black/50 border border-[#6fe7d3] rounded-full backdrop-blur-md text-sm font-bold tracking-[0.25em] text-white hover:bg-[#6fe7d3] hover:text-black transition-all uppercase">
+          {/* Top Right Pill ✅ ONLY CHANGE: move TEXT to right with margin-left */}
+          <div className="absolute top-[2%] right-[4%] z-[40] mix-blend-normal">
+            <button
+              className="
+                w-[400px] md:w-[520px] lg:w-[620px]
+                h-[66px] md:h-[78px]
+                bg-transparent
+                border border-[#6fe7d3]
+                rounded-full
+                text-[24px] md:text-[44px]
+                font-extrabold
+                tracking-[0.20em]
+                text-white
+                opacity-100
+                drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]
+                shadow-[0_0_20px_rgba(0,0,0,0.5)]
+                uppercase
+                select-none
+                flex items-center justify-start
+                pointer-events-auto
+              "
+              style={{ color: "#dba9a9ff" }}
+            >
+              <span className="ml-[40px] md:ml-[110px] lg:ml-[130px]">
                 DESIGN
-              </button>
-            </div>
-          </div>
-
-          {/* Bottom Left CTA */}
-          <div className="absolute bottom-[6%] left-[3%] z-30">
-            <button className="px-8 py-3 bg-black/40 border border-[#6fe7d3] rounded-full backdrop-blur-md text-[10px] md:text-xs font-bold tracking-[0.2em] text-white hover:bg-[#6fe7d3] hover:text-black transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
-              MAKE US A PART OF YOUR STORY TELLING
+              </span>
             </button>
           </div>
 
-          {/* === NAVIGATION ARROWS (MOVED TOWARD SCREEN EDGES) === */}
+          {/* Bottom Left CTA */}
+          <div className="absolute bottom-[3%] left-[1.0%] z-[80] mix-blend-normal">
+            <button
+              className="
+                w-[500px] md:w-[520px] lg:w-[620px]
+                h-[56px] md:h-[66px]
+                bg-transparent
+                border border-[#6fe7d3]
+                rounded-full
+                text-[13px] md:text-[15px]
+                font-extrabold
+                tracking-[0.22em]
+                text-white
+                opacity-100
+                drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]
+                shadow-[0_0_20px_rgba(0,0,0,0.5)]
+                flex items-center justify-center
+                select-none
+                pointer-events-auto
+              "
+              style={{ color: "#ffffff" }}
+            >
+              MAKE US A PART OF YOUR STORY TELLING
+            </button>
+          </div>
 
           {/* Left Arrow */}
           <button
             onClick={prev}
             className="
-              absolute top-1/2 -translate-y-1/2 z-50
+              absolute top-1/2 -translate-y-1/2 -translate-y-[100px] z-[10]
               outline-none bg-transparent border-none p-0 focus:outline-none
               left-[-10px] md:left-[-120px] lg:left-[-160px] xl:left-[-190px]
+              mix-blend-normal
+              pointer-events-auto
             "
             aria-label="Previous"
           >
@@ -206,13 +250,16 @@ export default function DesignsShowcase() {
             />
           </button>
 
+
           {/* Right Arrow */}
           <button
             onClick={next}
             className="
-              absolute top-1/2 -translate-y-1/2 z-50
+              absolute top-1/2 -translate-y-1/2 -translate-y-[100px] z-[10]
               outline-none bg-transparent border-none p-0 focus:outline-none
               right-[-8px] md:right-[-120px] lg:right-[-160px] xl:right-[-190px]
+              mix-blend-normal
+              pointer-events-auto
             "
             aria-label="Next"
           >
@@ -225,8 +272,8 @@ export default function DesignsShowcase() {
           </button>
 
           {/* Bottom Right Text */}
-          <div className="absolute bottom-[6%] right-[5%] z-30 text-right">
-            <p className="text-[14px] md:text-[16px] leading-tight text-[#e0e0e0] font-light tracking-wide drop-shadow-md">
+          <div className="absolute bottom-[1%] right-[5%] z-[10] text-right mix-blend-normal">
+            <p className="text-[22px] md:text-[16px] leading-tight text-[#e0e0e0] font-light tracking-wide drop-shadow-md">
               visual systems
               <br />
               spanning editorial,
