@@ -12,12 +12,13 @@ import HeroMeltWebGL from "@/components/hero/HeroMeltWebGL";
 
 export default function Home() {
   const [showNav, setShowNav] = useState(false);
+  const brandColor = "#c6376c";
 
   return (
     <main>
-      <Navbar logoSrc="/images/logo.png" show={showNav} brandColor="#c6376c" />
+      <Navbar logoSrc="/images/logo.png" show={showNav} brandColor={brandColor} />
       {/* Use SVG for best crispness, PNG also works */}
-      <HeroMeltWebGL imageSrc="/images/titleimage.svg" onScrolledChange={setShowNav} />
+      <HeroMeltWebGL imageSrc="/images/titleimage.svg" onScrolledChange={setShowNav} brandColor={brandColor} />
       <Manifesto />
       <FilmsShowcase />
       <Manifesto2 />
