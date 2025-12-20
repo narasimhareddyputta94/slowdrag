@@ -24,6 +24,8 @@ export default function FilmsShowcase() {
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [phase, setPhase] = useState<"idle" | "out" | "in">("idle");
+  const [muted, setMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(true);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Keep track of timeouts so we can clear them (prevents "stuck" phase)
@@ -42,6 +44,8 @@ export default function FilmsShowcase() {
     const v = videoRef.current;
     if (!v) return;
 
+    v.muted = muted;
+
     // reset + reload
     try {
       v.currentTime = 0;
@@ -49,8 +53,23 @@ export default function FilmsShowcase() {
     v.load();
 
     const p = v.play();
-    if (p) p.catch(() => {});
-  }, [activeIndex]);
+    if (p) {
+      p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
+  }, [activeIndex, muted]);
+
+  // Keep DOM video element in sync with mute state
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = muted;
+    if (!muted) {
+      const p = v.play();
+      if (p) {
+        p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      }
+    }
+  }, [muted]);
 
   const requestIndex = (nextIndex: number) => {
     if (nextIndex === activeIndex) return;
@@ -76,6 +95,90 @@ export default function FilmsShowcase() {
 
   const next = () => requestIndex((activeIndex + 1) % films.length);
   const prev = () => requestIndex((activeIndex - 1 + films.length) % films.length);
+
+  const toggleMute = () => setMuted((m) => !m);
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) {
+      const p = v.play();
+      if (p) {
+        p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      }
+      return;
+    }
+    v.pause();
+    setIsPlaying(false);
+  };
+
+  const pauseVideo = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (!v.paused) {
+      v.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const handlePlayerPointerDown = (e: React.PointerEvent) => {
+    if (!isPlaying) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest?.("[data-player-control]")) return;
+    pauseVideo();
+  };
+
+  const CenterPlayButton = ({ onClick }: { onClick: () => void }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Play video"
+      className="group relative grid size-20 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
+    >
+      <img
+        src="/images/play2.png"
+        alt=""
+        className="relative z-10 h-12 w-12 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
+      />
+    </button>
+  );
+
+  const ControlButton = ({
+    label,
+    pressed,
+    onClick,
+    children,
+  }: {
+    label: string;
+    pressed: boolean;
+    onClick: () => void;
+    children: React.ReactNode;
+  }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={pressed}
+      className="group relative grid size-12 place-items-center rounded-full bg-black/35 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/45 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+      style={{
+        boxShadow: `0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)`,
+      }}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
+      />
+      <span
+        aria-hidden
+        className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80"
+      />
+      <span
+        aria-hidden
+        className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md"
+      />
+      <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.05]">{children}</span>
+    </button>
+  );
 
   const shapePath = `
     M 120,120
@@ -127,7 +230,10 @@ export default function FilmsShowcase() {
       />
 
       <div className="relative w-[95%] md:w-[90%] lg:w-[80%] xl:w-[70%] max-w-[1200px] flex items-center justify-center z-10">
-        <div className="relative w-full aspect-[16/10] md:aspect-[1.8/1]">
+        <div
+          className="relative w-full aspect-[16/10] md:aspect-[1.8/1]"
+          onPointerDown={handlePlayerPointerDown}
+        >
           <svg
             viewBox="0 0 1000 600"
             className="w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] pointer-events-none"
@@ -177,16 +283,21 @@ export default function FilmsShowcase() {
                     ref={videoRef}
                     src={active.src}
                     poster={active.poster}
-                    muted
+                    muted={muted}
                     loop
                     playsInline
                     autoPlay
                     preload="metadata"
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
                     onCanPlay={() => {
                       const v = videoRef.current;
                       if (!v) return;
+                      v.muted = muted;
                       const p = v.play();
-                      if (p) p.catch(() => {});
+                      if (p) {
+                        p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+                      }
                     }}
                     style={{
                       width: "100%",
@@ -233,8 +344,23 @@ export default function FilmsShowcase() {
             <path d={shapePath} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
           </svg>
 
+          {/* Center overlay play button (kept outside SVG so blend layers don't tint it) */}
+          {!isPlaying ? (
+            <div
+              data-player-control
+              className="absolute z-40"
+              style={{
+                left: "50%",
+                top: "48%",
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <CenterPlayButton onClick={togglePlay} />
+            </div>
+          ) : null}
+
           {/* Top Left Pill */}
-          <div className="absolute top-[10%] left-[2.5%] z-30">
+          <div data-player-control className="absolute top-[10%] left-[2.5%] z-30">
             <div className="relative group">
               <div
                 className="absolute inset-0 blur-md opacity-20 group-hover:opacity-40 transition-opacity rounded-full"
@@ -259,8 +385,35 @@ export default function FilmsShowcase() {
             </div>
           </div>
 
+          {/* Audio Control (glossy, bottom-right) */}
+          <div
+            data-player-control
+            className="absolute z-40 flex items-center"
+            style={{ right: "24px", bottom: "80px" }}
+          >
+            <ControlButton onClick={toggleMute} pressed={!muted} label={muted ? "Unmute video" : "Mute video"}>
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={tealColor}
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+              >
+                <path d="M11 5L6 9H3v6h3l5 4V5z" />
+                {muted ? <path d="M22 9l-7 7" /> : <>
+                  <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                  <path d="M18.8 6.2a8.5 8.5 0 0 1 0 11.6" />
+                </>}
+              </svg>
+            </ControlButton>
+          </div>
+
           {/* Bottom Right CTA */}
-          <div className="absolute bottom-[6%] right-[3%] z-30">
+          <div data-player-control className="absolute bottom-[6%] right-[3%] z-30">
             <button
               type="button"
                 className="relative w-[450px] h-[48px] px-8 py-3 rounded-full text-base font-bold tracking-[0.25em] text-white transition-all flex items-center justify-end"
@@ -281,6 +434,7 @@ export default function FilmsShowcase() {
 
           {/* Cursor Arrows */}
           <button
+            data-player-control
             type="button"
             onClick={prev}
             className="group absolute top-1/2 -translate-y-1/2 z-50 bg-transparent border-none p-0 focus:outline-none"
@@ -296,6 +450,7 @@ export default function FilmsShowcase() {
           </button>
 
           <button
+            data-player-control
             type="button"
             onClick={next}
             className="group absolute top-1/2 -translate-y-1/2 z-50 bg-transparent border-none p-0 focus:outline-none"
@@ -312,6 +467,7 @@ export default function FilmsShowcase() {
 
           {/* Bottom Left Menu */}
           <div
+            data-player-control
             className="absolute bottom-[2%] left-[1%] z-30 flex flex-col items-start w-[260px] rounded-xl px-3 py-2"
             style={{ left: "-80px",  bottom:"-15px"}}
           >
