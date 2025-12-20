@@ -942,40 +942,15 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange, brandColor =
 
         // scroll mapping
         const onScroll = () => {
-            const vh = window.innerHeight || 1;
             const el = holdRef.current;
             const pinWrap = pinWrapRef.current;
+          const vh = pinWrap?.clientHeight || window.innerHeight || 1;
 
             if (!el) {
                 const start = vh * 0.02;
                 s.target = Math.max(0, window.scrollY - start) / (vh * 0.9);
                 onScrolledChange?.(window.scrollY > 10);
                 return;
-            }
-
-            // Pin behavior: keep the hero perfectly on-screen for the whole section.
-            // - fixed while the section spans the viewport
-            // - absolute before/after so it participates in normal layout
-            if (pinWrap) {
-                const rect = el.getBoundingClientRect();
-                const within = rect.top <= 0 && rect.bottom >= vh;
-                if (within) {
-                    pinWrap.style.position = "fixed";
-                    pinWrap.style.top = "0px";
-                    pinWrap.style.left = "0px";
-                    pinWrap.style.right = "0px";
-                } else if (rect.top > 0) {
-                    pinWrap.style.position = "absolute";
-                    pinWrap.style.top = "0px";
-                    pinWrap.style.left = "0px";
-                    pinWrap.style.right = "0px";
-                } else {
-                    const topPx = Math.max(0, el.offsetHeight - vh);
-                    pinWrap.style.position = "absolute";
-                    pinWrap.style.top = `${topPx}px`;
-                    pinWrap.style.left = "0px";
-                    pinWrap.style.right = "0px";
-                }
             }
 
             const rect = el.getBoundingClientRect();
@@ -1038,22 +1013,23 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange, brandColor =
                 width: "100%",
                 background: "#000",
                 position: "relative",
-                overflow: "hidden",
+          overflow: "visible",
             }}
         >
             <div
                 ref={pinWrapRef}
                 style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: "100vh",
-                    width: "100%",
+            position: "sticky",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: "100svh",
+            width: "100%",
                     background: "#000",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+            overflow: "hidden",
                 }}
             >
                 <div
