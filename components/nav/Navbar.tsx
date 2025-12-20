@@ -63,14 +63,16 @@ export default function Navbar({
         style={{
           position: "fixed",
           inset: 0,
-          pointerEvents: show ? "auto" : "none",
+          // Never block the page with an invisible full-screen layer.
+          // Only the actual controls (logo + hamburger) should receive pointer events.
+          pointerEvents: "none",
           opacity: show ? 1 : 0,
           transition: "opacity 450ms ease",
           zIndex: 50,
         }}
       >
         {/* Logo */}
-        <div style={{ position: "fixed", left: 36, top: 28 }}>
+        <div style={{ position: "fixed", left: 36, top: 28, pointerEvents: show ? "auto" : "none" }}>
           <button
             type="button"
             onClick={() => go("/")}
@@ -108,6 +110,7 @@ export default function Navbar({
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
+            pointerEvents: show ? "auto" : "none",
           }}
         >
           <span style={{ width: 34, height: 5, borderRadius: 999, background: brandColor, display: "block", marginBottom: 6 }} />

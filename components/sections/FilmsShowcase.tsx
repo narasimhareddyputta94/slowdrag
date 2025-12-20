@@ -130,7 +130,7 @@ export default function FilmsShowcase() {
         <div className="relative w-full aspect-[16/10] md:aspect-[1.8/1]">
           <svg
             viewBox="0 0 1000 600"
-            className="w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)]"
+            className="w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] pointer-events-none"
             preserveAspectRatio="xMidYMid meet"
           >
             <defs>
@@ -234,7 +234,7 @@ export default function FilmsShowcase() {
           </svg>
 
           {/* Top Left Pill */}
-          <div className="absolute top-[8%] left-[2.5%] z-30">
+          <div className="absolute top-[10%] left-[2.5%] z-30">
             <div className="relative group">
               <div
                 className="absolute inset-0 blur-md opacity-20 group-hover:opacity-40 transition-opacity rounded-full"
@@ -242,12 +242,16 @@ export default function FilmsShowcase() {
               />
               <button
                 type="button"
-                className="relative px-8 py-2 rounded-full text-sm font-bold tracking-[0.25em] text-white transition-all"
+                className="relative w-[260px] h-[48px] px-8 py-3 rounded-full text-base font-bold tracking-[0.25em] text-white transition-all flex items-center justify-end"
                 style={{
-                  background: "rgba(0,0,0,0.5)",
+                  background: "rgba(0, 0, 0, 1)",
+                  color: "#fff",
                   backdropFilter: "blur(12px)",
                   WebkitBackdropFilter: "blur(12px)",
-                  border: `1px solid ${tealColor}`,
+                  border: `3px solid ${tealColor}`,
+                  left: "-130px",
+                  bottom: "-20px",
+                  
                 }}
               >
                 FILMS
@@ -259,13 +263,17 @@ export default function FilmsShowcase() {
           <div className="absolute bottom-[6%] right-[3%] z-30">
             <button
               type="button"
-              className="px-8 py-3 rounded-full text-[10px] md:text-xs font-bold tracking-[0.2em] text-white transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0.5)]"
-              style={{
-                background: "rgba(0,0,0,0.5)",
-                backdropFilter: "blur(12px)",
-                WebkitBackdropFilter: "blur(12px)",
-                border: `1px solid ${tealColor}`,
-              }}
+                className="relative w-[450px] h-[48px] px-8 py-3 rounded-full text-base font-bold tracking-[0.25em] text-white transition-all flex items-center justify-end"
+                style={{
+                  background: "rgba(0, 0, 0, 1)",
+                  color: "#fff",
+                  backdropFilter: "blur(12px)",
+                  WebkitBackdropFilter: "blur(12px)",
+                  border: `3px solid ${tealColor}`,
+                  right: "-110px",
+                  bottom: "-40px",
+                  
+                }}
             >
               MAKE US A PART OF YOUR STORY TELLING
             </button>
@@ -303,9 +311,12 @@ export default function FilmsShowcase() {
           </button>
 
           {/* Bottom Left Menu */}
-          <div className="absolute bottom-[2%] left-[1%] z-30 flex flex-col items-start w-[260px] rounded-xl px-3 py-2">
+          <div
+            className="absolute bottom-[2%] left-[1%] z-30 flex flex-col items-start w-[260px] rounded-xl px-3 py-2"
+            style={{ left: "-80px",  bottom:"-15px"}}
+          >
             <h3
-              className="text-[14px] font-normal tracking-[0.1em] mb-2 text-gray-300"
+              className="text-[20px] font-normal tracking-[0.1em] mb-2 text-gray-300"
               style={{ textShadow: "0 2px 4px rgba(180, 0, 0, 0.9)" }}
             >
               We work across:
@@ -317,7 +328,7 @@ export default function FilmsShowcase() {
                   key={f.src}
                   type="button"
                   onClick={() => requestIndex(i)}
-                  className="w-full text-left py-1 text-[14px] font-normal tracking-[0.05em] transition-all duration-200 ease-in-out flex items-center gap-2 hover:brightness-125 bg-transparent border-none"
+                  className="w-full text-left py-1 text-[20px] font-normal tracking-[0.05em] transition-all duration-200 ease-in-out flex items-center gap-2 hover:brightness-225  bg-transparent border-none"
                   style={{
                     color: "#d1d5db",
                     textShadow:
