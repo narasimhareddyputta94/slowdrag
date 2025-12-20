@@ -621,6 +621,7 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange, brandColor =
         ro: null as ResizeObserver | null,
         lastLayoutW: 0,
         lastLayoutH: 0,
+        stableVh: 0,
     });
 
     const loop = () => {
@@ -796,6 +797,15 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange, brandColor =
 
         s.bu_tex = gl.getUniformLocation(blitProg, "u_tex");
 
+        const setStableVh = () => {
+          const pinWrap = pinWrapRef.current;
+          if (!pinWrap) return;
+          const h = Math.max(1, window.innerHeight || 1);
+          if (s.stableVh === h) return;
+          s.stableVh = h;
+          pinWrap.style.height = `${h}px`;
+        };
+
         const resize = () => {
             if (!canvas.parentElement) return;
             const rect = canvas.parentElement.getBoundingClientRect();
@@ -885,6 +895,7 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange, brandColor =
 
         s.ro = new ResizeObserver(() => resize());
         if (canvas.parentElement) s.ro.observe(canvas.parentElement);
+        setStableVh();
         resize();
 
         // logo texture
@@ -944,7 +955,7 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange, brandColor =
         const onScroll = () => {
             const el = holdRef.current;
             const pinWrap = pinWrapRef.current;
-          const vh = pinWrap?.clientHeight || window.innerHeight || 1;
+          const vh = s.stableVh || pinWrap?.clientHeight || window.innerHeight || 1;
 
             if (!el) {
                 const start = vh * 0.02;
@@ -976,10 +987,18 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange, brandColor =
         };
 
         window.addEventListener("scroll", onScroll, { passive: true });
+        const onResize = () => {
+          // Update stable viewport height (no scroll-time layout changes)
+          setStableVh();
+          resize();
+          onScroll();
+        };
+        window.addEventListener("resize", onResize, { passive: true });
         onScroll();
 
         return () => {
             window.removeEventListener("scroll", onScroll);
+          window.removeEventListener("resize", onResize);
             if (s.ro) s.ro.disconnect();
             cancelAnimationFrame(s.raf);
 
@@ -1023,7 +1042,7 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange, brandColor =
             top: 0,
             left: 0,
             right: 0,
-            height: "100svh",
+                height: "100vh",
             width: "100%",
                     background: "#000",
                     display: "flex",

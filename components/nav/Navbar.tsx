@@ -8,6 +8,8 @@ type NavItem = { label: string; href: string };
 
 type NavbarProps = {
   logoSrc: string;
+  logoAltSrc?: string;
+  useAltLogo?: boolean;
   show: boolean;            // controls fade-in (hero can toggle)
   brandColor?: string;      // menu bg uses this
   items?: NavItem[];
@@ -15,6 +17,8 @@ type NavbarProps = {
 
 export default function Navbar({
   logoSrc,
+  logoAltSrc,
+  useAltLogo = false,
   show,
   brandColor = "#c6376c",
   items = [
@@ -82,15 +86,49 @@ export default function Navbar({
               border: 0,
               padding: 0,
               cursor: "pointer",
+              width: 180,
+              height: 96,
+              position: "relative",
             }}
           >
             <Image
               src={logoSrc}
               alt="Logo"
-              width={96}
-              height={96}
-              style={{ width: 96, height: 96, objectFit: "contain", userSelect: "none" }}
+              fill
+              sizes="180px"
+              priority
+              style={{
+                objectFit: "contain",
+                userSelect: "none",
+                opacity: useAltLogo ? 0 : 1,
+                transform: useAltLogo
+                  ? "translate3d(0,-1px,0) scale(0.992)"
+                  : "translate3d(0,0,0) scale(1)",
+                transition:
+                  "opacity 850ms cubic-bezier(0.16, 1, 0.3, 1), transform 850ms cubic-bezier(0.16, 1, 0.3, 1)",
+                willChange: "opacity, transform",
+              }}
             />
+            {logoAltSrc ? (
+              <Image
+                src={logoAltSrc}
+                alt="Logo"
+                fill
+                sizes="180px"
+                priority
+                style={{
+                  objectFit: "contain",
+                  userSelect: "none",
+                  opacity: useAltLogo ? 1 : 0,
+                  transform: useAltLogo
+                    ? "translate3d(0,0,0) scale(1)"
+                    : "translate3d(0,1px,0) scale(1.008)",
+                  transition:
+                    "opacity 850ms cubic-bezier(0.16, 1, 0.3, 1) 60ms, transform 850ms cubic-bezier(0.16, 1, 0.3, 1) 60ms",
+                  willChange: "opacity, transform",
+                }}
+              />
+            ) : null}
           </button>
         </div>
 
