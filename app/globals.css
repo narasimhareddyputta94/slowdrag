@@ -13,5 +13,15 @@ body {
   color: #fff;
 }
 
+/* Contact form placeholders: keep them clearly visible */
+.contact-field::placeholder {
+  color: #fff;
+  opacity: 1;
+}
+
+.contact-field::-ms-input-placeholder {
+  color: #fff;
+}
+
 
 
