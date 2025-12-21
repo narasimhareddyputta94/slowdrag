@@ -56,7 +56,7 @@ Z
         style={{
           minHeight: "100vh",
           paddingTop: 140, // make room for fixed navbar
-          paddingBottom: 10,
+          paddingBottom: 0,
           paddingInlineStart: 20,
           paddingRight: 220,
         }}
