@@ -40,7 +40,12 @@ export default function Home() {
       />
       {/* Use SVG for best crispness, PNG also works */}
       <div ref={heroWrapRef}>
-        <HeroMeltWebGL imageSrc="/images/titleimage.svg" onScrolledChange={setShowNav} brandColor={brandColor} />
+        <HeroMeltWebGL
+          imageSrc="/images/titleimage.svg"
+          onScrolledChange={setShowNav}
+          brandColor={brandColor}
+          showCaption={showNav}
+        />
       </div>
       <Manifesto />
       <FilmsShowcase />

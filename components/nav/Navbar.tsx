@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 type NavItem = { label: string; href: string };
@@ -31,9 +31,18 @@ export default function Navbar({
   const router = useRouter();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuOpenRef = useRef(menuOpen);
+
+  useEffect(() => {
+    menuOpenRef.current = menuOpen;
+  }, [menuOpen]);
 
   // Close drawer on route change
-  useEffect(() => setMenuOpen(false), [pathname]);
+  useEffect(() => {
+    if (!menuOpenRef.current) return;
+    const id = requestAnimationFrame(() => setMenuOpen(false));
+    return () => cancelAnimationFrame(id);
+  }, [pathname]);
 
   // ESC to close
   useEffect(() => {

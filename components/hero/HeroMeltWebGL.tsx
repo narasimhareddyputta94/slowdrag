@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 type HeroProps = {
     imageSrc: string;
     onScrolledChange?: (scrolled: boolean) => void;
   brandColor?: string; // sRGB hex (#rrggbb)
+  showCaption?: boolean;
 };
 
 function clamp01(n: number) {
@@ -552,7 +554,13 @@ void main() {
 }
 `;
 
-export default function HeroMeltWebGL({ imageSrc, onScrolledChange, brandColor = "#c6376c" }: HeroProps) {
+export default function HeroMeltWebGL({
+  imageSrc,
+  onScrolledChange,
+  brandColor = "#c6376c",
+  showCaption = false,
+}: HeroProps) {
+  const router = useRouter();
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const holdRef = useRef<HTMLElement | null>(null);
     const pinWrapRef = useRef<HTMLDivElement | null>(null);
@@ -1051,6 +1059,86 @@ export default function HeroMeltWebGL({ imageSrc, onScrolledChange, brandColor =
             overflow: "hidden",
                 }}
             >
+      <div
+        aria-hidden={!showCaption}
+        style={{
+        position: "absolute",
+        left: 36,
+        bottom: 28,
+        zIndex: 10,
+        pointerEvents: "none",
+        opacity: showCaption ? 1 : 0,
+        transition: "opacity 450ms ease",
+        color: "#fff",
+        fontFamily: "var(--font-offbit), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+        textTransform: "uppercase",
+        letterSpacing: "0.14em",
+        lineHeight: 1.15,
+            fontSize: "clamp(22px, 2.2vw, 34px)",
+        whiteSpace: "pre-line",
+        mixBlendMode: "normal",
+        }}
+      >
+        {"\u201cIMAGES BREATHE\nBEFORE THEY\nSPEAK\u201d"}
+      </div>
+
+        <div
+          aria-hidden={!showCaption}
+          style={{
+            position: "absolute",
+            right: 36,
+            top: "50%",
+            transform: "translate3d(0,-50%,0)",
+            zIndex: 10,
+            pointerEvents: "none",
+            opacity: showCaption ? 1 : 0,
+            transition: "opacity 450ms ease",
+            color: "#fff",
+            fontFamily: "var(--font-offbit), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+            textTransform: "uppercase",
+            letterSpacing: "0.14em",
+            lineHeight: 1.15,
+            fontSize: "clamp(18px, 1.8vw, 28px)",
+            whiteSpace: "pre-line",
+            textAlign: "right",
+            mixBlendMode: "normal",
+          }}
+        >
+          {"RHYTHM\nRESISTANCE.\nREMEMBRANCE,"}
+        </div>
+
+        <button
+          type="button"
+          aria-label="Contact us"
+          onClick={() => router.push("/contact")}
+          style={{
+            position: "absolute",
+            right: 36,
+            bottom: 28,
+            zIndex: 10,
+            opacity: showCaption ? 1 : 0,
+            transition: "opacity 450ms ease",
+            pointerEvents: showCaption ? "auto" : "none",
+
+            background: "transparent",
+            border: `2px solid ${brandColor}`,
+            borderRadius: 999,
+            padding: "10px 18px",
+
+            color: "#fff",
+            fontFamily:
+              "var(--font-offbit), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+            textTransform: "uppercase",
+            letterSpacing: "0.14em",
+            fontSize: "clamp(14px, 1.2vw, 18px)",
+            lineHeight: 1,
+
+            cursor: "pointer",
+          }}
+        >
+          CONTACT US
+        </button>
+
                 <div
                     style={{
                         width: "100%",
