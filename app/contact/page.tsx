@@ -5,8 +5,45 @@ export default function ContactPage() {
   const brandColor = "#c6376c";
   const brandTeal = "#9c483aff";
   const brandWhite = "#927a7aff";
-  const notchWaveD = makeNotchWavePath(7, 11);
-  const rightNotchWaveD = makeNotchWavePath(7, 11, { straightLastSegment: true });
+
+  // Contact card silhouette (edit this `d` string to control the box shape)
+  // Uses the same idea as `shapePath` in Designs/Films.
+const contactShapePath = `
+M 229.50,0.00
+L 456.00,0.00
+
+Q 483.77,3.73 488.00,31.43
+Q 492.23,59.13 520.00,62.86
+Q 547.77,66.59 552.00,94.29
+Q 556.23,121.98 584.00,125.71
+Q 611.77,129.45 616.00,157.14
+Q 620.23,184.84 648.00,188.57
+L 974.00,188.57
+L 986.00,188.00
+Q 1000.00,220.00 1000.00,244.00
+L 1000.00,576.00
+Q 1000.00,600.00 976.00,600.00
+L 744.00,600.00
+Q 720.00,600.00 696.00,600.00
+L 24.00,600.00
+Q 0.00,600.00 0.00,576.00
+L 0.00,274.00
+
+Q 0.17,234.43 28.50,226.29
+Q 56.83,218.15 57.00,188.57
+Q 57.17,159.00 85.50,150.86
+Q 113.83,142.72 114.00,113.14
+Q 114.17,83.56 142.50,75.43
+Q 170.83,67.29 171.00,37.71
+Q 171.17,8.13 199.50,0.00
+
+Z
+`;
+
+
+
+
+
 
   return (
     <main style={{ background: "#000", color: "#fff" }}>
@@ -23,12 +60,12 @@ export default function ContactPage() {
           minHeight: "100vh",
           paddingTop: 140, // make room for fixed navbar
           paddingBottom: 10,
-          paddingInlineStart: 120,
+          paddingInlineStart: 20,
           paddingRight: 220,
         }}
       >
         <div className="mx-auto max-w-[1400px] px-10 md:px-16">
-          <div className="grid gap-10 lg:gap-16 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="grid gap-10 lg:gap-16 lg:grid-cols-[1.35fr_0.65fr]">
             {/* Left: form card */}
             <div style={{ position: "relative" }}>
               <div
@@ -38,127 +75,54 @@ export default function ContactPage() {
                   borderRadius: 44,
                   padding: 34,
                   paddingLeft: 120,
-                  paddingBottom: 80,
+                  paddingBottom: 30,
                   display: "flex",
                   flexDirection: "column",
                   color: "#0b0b0b",
-                  // Notch sizing
-                  // - Top notch stays as-is
-                  // - Left notch reduced (shallower) per request
-                  ...( {
-                    "--notchTop": "clamp(280px, 44vh, 360px)",
-                    "--notchLeft": "clamp(200px, 32vh, 270px)",
-                    // Extra shift for the top-right wavy cut
-                    "--rightCutShift": "clamp(170px, 18vh, 240px)",
-                    // Bottom-right cutout for the quote
-                    "--brCutW": "clamp(340px, 28vw, 480px)",
-                    "--brCutH": "clamp(96px, 12vh, 132px)",
-                  } as React.CSSProperties ),
-                  background: `linear-gradient(135deg, ${brandWhite} 0%, ${brandTeal} 46%, ${brandColor} 100%)`,
-                  boxShadow: "inset 0 0 0 2px rgba(0,0,0,0.65)",
+                  background: "#000",
                   overflow: "hidden",
                   fontFamily: "var(--font-offbit)",
                 }}
               >
-              {/* Curved top-left cut */}
-              <div
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "var(--notchTop)",
-                  height: "var(--notchLeft)",
-                  pointerEvents: "none",
-                  zIndex: 2,
-                }}
-              >
+                {/* Shape background + border (path-driven like other showcases) */}
                 <svg
-                  viewBox="0 0 100 100"
-                  width="100%"
-                  height="100%"
+                  aria-hidden="true"
+                  viewBox="0 0 1000 600"
                   preserveAspectRatio="none"
+                  className="pointer-events-none absolute inset-0 h-full w-full"
+                  style={{ zIndex: 1 }}
                 >
-                  {/* Fill the removed corner area with page background */}
-                  <path d={`M0 0 L100 0 ${notchWaveD} L0 0 Z`} fill="#000" />
-                  {/* Draw the wavy (7-curve) cut border */}
+                  <defs>
+                    <clipPath id="contact-card-clip" clipPathUnits="userSpaceOnUse">
+                      <path d={contactShapePath} />
+                    </clipPath>
+
+                    <linearGradient id="contact-card-gradient" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor={brandWhite} />
+                      <stop offset="46%" stopColor={brandTeal} />
+                      <stop offset="100%" stopColor={brandColor} />
+                    </linearGradient>
+                  </defs>
+
+                  <g clipPath="url(#contact-card-clip)">
+                    <rect x="0" y="0" width="1000" height="600" fill="url(#contact-card-gradient)" />
+                  </g>
+
                   <path
-                    d={`M100 0 ${notchWaveD}`}
+                    d={contactShapePath}
                     fill="none"
                     stroke="rgba(0,0,0,0.65)"
                     strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
                     vectorEffect="non-scaling-stroke"
                   />
                 </svg>
-              </div>
-
-              {/* Curved top-right cut (mirrored) */}
-              <div
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  // shift the wavy cut left; keep its size unchanged
-                  right: "var(--rightCutShift)",
-                  width: "var(--notchTop)",
-                  height: "var(--notchLeft)",
-                  pointerEvents: "none",
-                  zIndex: 2,
-                }}
-              >
-                <svg
-                  viewBox="0 0 100 100"
-                  width="100%"
-                  height="100%"
-                  preserveAspectRatio="none"
-                >
-                  {/* Mirror horizontally so the cut sits on the top-right corner */}
-                  <path
-                    d={`M0 0 L100 0 ${rightNotchWaveD} L0 0 Z`}
-                    fill="#000"
-                    transform="translate(100 0) scale(-1 1)"
-                  />
-                  <path
-                    d={`M100 0 ${rightNotchWaveD}`}
-                    fill="none"
-                    stroke="rgba(0,0,0,0.65)"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    vectorEffect="non-scaling-stroke"
-                    transform="translate(100 0) scale(-1 1)"
-                  />
-                </svg>
-              </div>
-
-              {/* Mask the right-side pillar created by shifting the cut (only up to the last curve) */}
-              <div
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  right: 0,
-                  // Slightly overlap left to cover any anti-aliased seam/border.
-                  width: "calc(var(--rightCutShift) + 3px)",
-                  height: "calc(var(--notchLeft) - 37px)",
-                  background: "#000",
-                  pointerEvents: "none",
-                  // Above the notch stroke so the old pillar edge line can't show through.
-                  zIndex: 3,
-                  boxShadow: "-2px 0 0 #000",
-                  borderTopRightRadius: 44,
-                }}
-              >
-              </div>
 
               {/* Quote moved onto the contact box near the top-right cut */}
               <div
                 style={{
                   position: "absolute",
                   top: 80,
-                  right: "calc(var(--rightCutShift) + -180px)",
+                  right: 40,
                   zIndex: 10,
                   textAlign: "left",
                   textTransform: "uppercase",
@@ -175,11 +139,15 @@ export default function ContactPage() {
                 {"\u201cLET\u2019S MAKE\nIMAGES\nTHAT STAY.\u201d"}
               </div>
 
+              <div style={{ position: "relative", zIndex: 2, height: "100%", display: "flex", flexDirection: "column" }}>
+
               <form
                 style={{
                   display: "grid",
-                  marginTop: "auto",
-                  gap: 24,
+                  // Push the field "boxes" down inside the card
+                  marginTop: "clamp(240px, 26vh, 340px)",
+                  marginLeft: "120px",
+                  gap: 30,
                 }}
               >
                 <div
@@ -223,17 +191,24 @@ export default function ContactPage() {
                   name="message"
                   placeholder="PROJECT / COMMENT"
                   className="contact-field placeholder:text-white placeholder:opacity-100"
-                  rows={6}
+                  rows={7}
                   style={{
                     ...inputStyle,
-                    maxWidth: "min(840px, 100%)",
+                    maxWidth: "min(740px, 100%)",
                     borderRadius: 22,
                     paddingTop: 16,
                     resize: "none",
                   }}
                 />
 
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginTop: 8,
+                  }}
+                >
                   <button
                     type="submit"
                     style={{
@@ -255,23 +230,6 @@ export default function ContactPage() {
                 </div>
               </form>
 
-              {/* Bottom-right cutout area for the quote */}
-              <div
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  // Slightly overshoot to prevent any anti-aliased/colored seam
-                  // from the gradient showing at the edge.
-                  right: -2,
-                  bottom: -2,
-                  width: "calc(var(--brCutW) + 4px)",
-                  height: "calc(var(--brCutH) + 4px)",
-                  background: "#000",
-                  pointerEvents: "none",
-                  zIndex: 2,
-                
-                }}
-              >
               </div>
               </div>
 
@@ -316,72 +274,21 @@ export default function ContactPage() {
   );
 }
 
-function makeNotchWavePath(
-  segments: number,
-  amplitude: number,
-  options?: {
-    straightLastSegment?: boolean;
-    invertSegments?: number[]; // <-- NEW
-  }
-) {
-  const n = Math.max(1, Math.floor(segments));
-  const amp = Math.max(0, amplitude);
-
-  const dx = -1;
-  const dy = 1;
-  const invLen = 1 / Math.hypot(dx, dy);
-  const ux = dx * invLen;
-  const uy = dy * invLen;
-  const px = -uy;
-  const py = ux;
-
-  const invert = new Set(options?.invertSegments ?? []);
-
-  let d = "";
-  for (let i = 0; i < n; i++) {
-    const t0 = i / n;
-    const t1 = (i + 1) / n;
-
-    const x0 = 100 * (1 - t0);
-    const y0 = 100 * t0;
-    const x1 = 100 * (1 - t1);
-    const y1 = 100 * t1;
-
-    const mx = (x0 + x1) / 2;
-    const my = (y0 + y1) / 2;
-
-    // default alternating bulge direction (your current logic)
-    let sign = i % 2 === 0 ? 1 : -1; // :contentReference[oaicite:1]{index=1}
-
-    // NEW: flip ONLY the curves you want
-    if (invert.has(i)) sign *= -1;
-
-    const cx = mx + px * amp * sign;
-    const cy = my + py * amp * sign;
-
-    if (options?.straightLastSegment && i === n - 1) {
-      d += ` L ${x1.toFixed(3)} ${y0.toFixed(3)} L ${x1.toFixed(3)} ${y1.toFixed(3)}`;
-    } else {
-      d += ` Q ${cx.toFixed(3)} ${cy.toFixed(3)} ${x1.toFixed(3)} ${y1.toFixed(3)}`;
-    }
-  }
-  return d;
-}
-
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  maxWidth: 560,
+  maxWidth: 520,
   justifySelf: "start",
-  border: "2px solid rgba(0,0,0,0.65)",
+  border: "3px solid rgba(0,0,0,0.82)",
   borderRadius: 999,
   padding: "12px 16px",
   background: "transparent",
   outline: "none",
-  color: "#ffffff",
-  caretColor: "#ffffff",
+  color: "#fff",
+  caretColor: "#fff",
   fontFamily: "var(--font-offbit)",
+  fontWeight: 700,
   textTransform: "uppercase",
   letterSpacing: "0.14em",
-  fontSize: 12,
+  fontSize: 14,
 };
