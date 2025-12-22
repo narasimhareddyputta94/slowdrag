@@ -10,10 +10,6 @@ type HeroProps = {
   showCaption?: boolean;
 };
 
-function clamp01(n: number) {
-  return Math.max(0, Math.min(1, n));
-}
-
 function srgbToLinear(c: number) {
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
@@ -218,6 +214,13 @@ void main() {
   // progress front (bottom first) but wavy and staggered
   float frontWob = (fbm(vec2(uv.x * 2.8 + u_seed, 0.6 + anim * 0.10)) - 0.5) * 0.24;
   float bottomFirst = smoothstep(0.00, 0.45, tt - uv.y * 1.22 - frontWob);
+  // By the end, let the melt reach the full height of the logo.
+  float fullReach = smoothstep(0.55, 1.15, tt);
+  bottomFirst = mix(bottomFirst, 1.0, fullReach);
+
+  // By the very end, force full coverage across the logo so it doesn't only
+  // affect select edges/lanes.
+  float fullFill = smoothstep(0.92, 1.18, tt);
 
   // x drip lanes (slowly evolving so lanes feel alive)
   float lane = smoothstep(0.16, 0.94, fbm(vec2(uv.x * 7.5 + u_seed, 0.20 + anim * 0.07)));
@@ -241,11 +244,13 @@ void main() {
     (1.0 + shimmer * 0.04 * smoothstep(0.05, 0.40, tt));
 
   newMelt *= columnHold;
+  newMelt += fullFill * columnHold * (0.55 + 0.10 * channel);
   newMelt += globMask * visc * (0.12 + 0.25 * tt);
 
   // let accumulated mask keep creeping downward (still monotonic)
-  // slower creep so it feels thick
-  float creep = smoothstep(0.28, 1.10, tt) * flowLane * 0.035 * columnHold;
+  // keep it alive even after the scroll-driven melt finishes
+  float creepJ = 0.75 + 0.5 * fbm(vec2(uv.x * 1.4 + u_seed, u_anim * 0.08));
+  float creep = smoothstep(0.18, 1.10, tt) * flowLane * 0.055 * columnHold * creepJ;
   float next = max(prev, clamp(newMelt + prev * creep, 0.0, 1.0));
   gl_FragColor = vec4(next, 0.0, 0.0, 1.0);
 }
@@ -315,9 +320,7 @@ void main() {
   // Mask already grows monotonically and advects downwards into lanes.
   float melt = smoothstep(0.04, 0.88, m) * pr;
 
-  // Keep the top clean: let liquid exist mostly below midline.
-  float topHold = smoothstep(0.58, 0.84, uvC.y);
-  melt *= (1.0 - 0.85 * topHold);
+  // Let liquid exist across the full logo area (not just the bottom).
 
     // Digital column grid for premium "pixel paint" feel (vertical columns only).
     float colCount = clamp(floor(u_res.x / 6.0), 140.0, 360.0);
@@ -329,7 +332,7 @@ void main() {
     float micro = noise(vec2(xq * 78.0 + u_seed, m * 2.6 + 2.0 + u_anim * 0.18));
     float channel = mix(laneN, micro, 0.18);
   float dripSel = smoothstep(0.25, 0.90, channel);
-  float laneCut = mix(0.14, 0.92, dripSel);
+  float laneCut = mix(0.30, 1.00, dripSel);
 
   float maskCol = texture2D(u_mask, vec2(v_uv.x, clamp(v_uv.y - 0.05, 0.0, 1.0))).r;
   float columnGate = max(smoothstep(0.07, 0.40, maskCol), smoothstep(0.30, 0.80, baseA));
@@ -353,9 +356,10 @@ void main() {
 
     // "Forever" motion: slow downward flow field inside the liquid, even when pr is finished.
     // This only affects liquid shading/opacity, never the logo.
-    float flowY = u_anim * 0.030; // subtle, heavy
-    float streak = fbm(vec2(xi * 0.23 + u_seed * 0.9, uvC.y * 6.5 - flowY));
-    float streak2 = fbm(vec2(xi * 0.41 + u_seed * 1.7, uvC.y * 12.0 - flowY * 1.35));
+    float flowY = u_anim * 0.110; // stronger perpetual flow
+    float flowX = u_anim * 0.030;
+    float streak = fbm(vec2(xi * 0.23 + u_seed * 0.9 + flowX, uvC.y * 6.5 - flowY));
+    float streak2 = fbm(vec2(xi * 0.41 + u_seed * 1.7 - flowX * 0.6, uvC.y * 12.0 - flowY * 1.35));
     float streakMix = clamp(mix(streak, streak2, 0.35), 0.0, 1.0);
     float streakMask = smoothstep(0.35, 0.88, streakMix);
 
@@ -375,7 +379,7 @@ void main() {
     }
     slideGlobs *= smoothstep(0.10, 0.55, m) * (0.35 + 0.65 * dripSel);
 
-    float alphaFlow = (1.0 + glob * 0.28) * (0.88 + 0.18 * streakMask) * (1.0 + slideGlobs * 0.18);
+    float alphaFlow = (1.0 + glob * 0.40) * (0.82 + 0.34 * streakMask) * (1.0 + slideGlobs * 0.34);
     liquidAlpha = clamp(liquidAlpha * alphaFlow, 0.0, 1.0);
 
   vec3 nrm = normalize(vec3(-grad * 3.0, 1.0));
@@ -630,6 +634,15 @@ export default function HeroMeltWebGL({
         lastLayoutW: 0,
         lastLayoutH: 0,
         stableVh: 0,
+
+        // Virtual scroll (lets us pin longer without increasing section height)
+        virtualPx: 0,
+        virtualMaxPx: 0,
+        touchLastY: 0,
+        touching: false,
+
+        // Track whether we should reset the monotonic mask when returning to top.
+        hasEverMelted: false,
     });
 
     const loop = () => {
@@ -640,9 +653,8 @@ export default function HeroMeltWebGL({
 
         const anim = (performance.now() - s.t0) * 0.001;
 
-        // slower smoothing = thicker feel
-        // heavier syrup: slower response to scroll
-        s.p += (s.target - s.p) * 0.026;
+        // Respond quickly so the melt is visible on the first scroll.
+        s.p += (s.target - s.p) * 0.07;
         const timeVal = Math.max(0, Math.min(1.25, s.p));
         const progress01 = Math.max(0, Math.min(1, timeVal));
 
@@ -959,42 +971,158 @@ export default function HeroMeltWebGL({
             s.raf = requestAnimationFrame(loop);
         };
 
-        // scroll mapping
+        const resetMelt = () => {
+          const gl = s.gl;
+          if (!gl) return;
+          if (!s.fbA || !s.fbB) return;
+
+          // Reset scroll-driven state
+          s.virtualPx = 0;
+          s.target = 0;
+          s.p = 0;
+
+          // Clear both ping-pong mask buffers to 0 so the melt can start fresh.
+          gl.bindFramebuffer(gl.FRAMEBUFFER, s.fbA);
+          gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+          gl.disable(gl.BLEND);
+          gl.clearColor(0, 0, 0, 1);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+
+          gl.bindFramebuffer(gl.FRAMEBUFFER, s.fbB);
+          gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+          gl.disable(gl.BLEND);
+          gl.clearColor(0, 0, 0, 1);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          s.ping = 0;
+          s.hasEverMelted = false;
+          onScrolledChange?.(false);
+        };
+
+        const getVh = () => {
+          const pinWrap = pinWrapRef.current;
+          return s.stableVh || pinWrap?.clientHeight || window.innerHeight || 1;
+        };
+
+        const applyFromRaw01 = (raw01: number) => {
+          // Start immediately when the user starts scrolling.
+          const afterDeadzone = Math.max(0, Math.min(1, raw01));
+
+          // The mask is monotonic, so scrolling back up won't visually rewind.
+          // When the user returns to the very top after melting, reset so it can
+          // start again on the next scroll.
+          if (afterDeadzone > 0.08) s.hasEverMelted = true;
+          if (s.hasEverMelted && afterDeadzone < 0.0015) {
+            resetMelt();
+            return;
+          }
+
+          // Run the melt across the whole scroll input range.
+          // This ensures the melt reaches its end state only at the end of the section.
+          const p = afterDeadzone;
+
+          // drive the melt a bit past 1 for richer drips
+          s.target = p * 1.25;
+          onScrolledChange?.(afterDeadzone > 0.001);
+        };
+
+        const isPinnedNow = () => {
+          const el = holdRef.current;
+          if (!el) return false;
+          const rect = el.getBoundingClientRect();
+          // For a 100vh section, rect.bottom will quickly become < vh on tiny scroll.
+          // We still want to treat it as pinned as long as the section is on-screen.
+          return rect.top <= 0 && rect.bottom > 0;
+        };
+
+        const ensureVirtualRange = () => {
+          const vh = getVh();
+          const nextMax = Math.max(1, vh * 1); // 1 full scroll
+          if (s.virtualMaxPx !== nextMax) s.virtualMaxPx = nextMax;
+        };
+
+        const consumeVirtualDelta = (deltaPx: number) => {
+          ensureVirtualRange();
+          const max = s.virtualMaxPx || 1;
+          const prev = s.virtualPx;
+          const next = Math.max(0, Math.min(max, prev + deltaPx));
+          s.virtualPx = next;
+          applyFromRaw01(next / max);
+          return deltaPx - (next - prev); // remaining delta not consumed by the pin
+        };
+
+        const normalizeWheelDelta = (e: WheelEvent) => {
+          const vh = getVh();
+          if (e.deltaMode === 1) return e.deltaY * 16; // lines → px-ish
+          if (e.deltaMode === 2) return e.deltaY * vh; // pages → px
+          return e.deltaY;
+        };
+
+        // scroll mapping (fallback for scrollbar drag / keyboard scroll)
         const onScroll = () => {
-            const el = holdRef.current;
-            const pinWrap = pinWrapRef.current;
-          const vh = s.stableVh || pinWrap?.clientHeight || window.innerHeight || 1;
+          const el = holdRef.current;
+          const vh = getVh();
 
-            if (!el) {
-                const start = vh * 0.02;
-                s.target = Math.max(0, window.scrollY - start) / (vh * 0.9);
-                onScrolledChange?.(window.scrollY > 10);
-                return;
-            }
+          if (!el) {
+            const start = vh * 0.02;
+            s.target = Math.max(0, window.scrollY - start) / (vh * 0.9);
+            onScrolledChange?.(window.scrollY > 10);
+            return;
+          }
 
-            const rect = el.getBoundingClientRect();
-            const total = Math.max(1, el.offsetHeight - vh);
-            const raw = Math.max(0, Math.min(1, -rect.top / total));
+          const rect = el.getBoundingClientRect();
+          const total = Math.max(1, el.offsetHeight - vh);
+          const raw = Math.max(0, Math.min(1, -rect.top / total));
+          applyFromRaw01(raw);
+        };
 
-            // small deadzone so initial load is perfectly still
-            const start = 0.02;
-            const afterDeadzone = Math.max(0, raw - start) / Math.max(0.0001, 1 - start);
+        // Virtual pin: keep the hero fixed for 1 full scroll without increasing section height.
+        const onWheel = (e: WheelEvent) => {
+          if (!isPinnedNow()) return;
+          const delta = normalizeWheelDelta(e);
+          if (Math.abs(delta) < 0.001) return;
+          e.preventDefault();
 
-            // Keep the hero pinned for the whole section:
-            // - short dwell (no melt)
-            // - run the melt over only part of the scroll
-            // - hold the completed look visible until the hero ends
-            const dwell = 0.10;
-            const animSpan = 0.42;
-            const t = (afterDeadzone - dwell) / Math.max(0.0001, animSpan);
-            const p = Math.max(0, Math.min(1, t));
+          const remaining = consumeVirtualDelta(delta);
+          if (Math.abs(remaining) > 0.5) {
+            window.scrollBy({ top: remaining, left: 0, behavior: "auto" });
+          }
+        };
 
-            // drive the melt a bit past 1 for richer drips
-            s.target = p * 1.25;
-            onScrolledChange?.(afterDeadzone > 0.001);
+        const onTouchStart = (e: TouchEvent) => {
+          if (!isPinnedNow()) return;
+          if (e.touches.length !== 1) return;
+          s.touching = true;
+          s.touchLastY = e.touches[0].clientY;
+        };
+
+        const onTouchMove = (e: TouchEvent) => {
+          if (!s.touching) return;
+          if (!isPinnedNow()) return;
+          if (e.touches.length !== 1) return;
+
+          const y = e.touches[0].clientY;
+          const delta = s.touchLastY - y;
+          s.touchLastY = y;
+          if (Math.abs(delta) < 0.001) return;
+          e.preventDefault();
+
+          const remaining = consumeVirtualDelta(delta);
+          if (Math.abs(remaining) > 0.5) {
+            window.scrollBy({ top: remaining, left: 0, behavior: "auto" });
+          }
+        };
+
+        const onTouchEnd = () => {
+          s.touching = false;
         };
 
         window.addEventListener("scroll", onScroll, { passive: true });
+        window.addEventListener("wheel", onWheel, { passive: false });
+        window.addEventListener("touchstart", onTouchStart, { passive: true });
+        window.addEventListener("touchmove", onTouchMove, { passive: false });
+        window.addEventListener("touchend", onTouchEnd, { passive: true });
         const onResize = () => {
           // Update stable viewport height (no scroll-time layout changes)
           setStableVh();
@@ -1006,6 +1134,10 @@ export default function HeroMeltWebGL({
 
         return () => {
             window.removeEventListener("scroll", onScroll);
+            window.removeEventListener("wheel", onWheel);
+            window.removeEventListener("touchstart", onTouchStart);
+            window.removeEventListener("touchmove", onTouchMove);
+            window.removeEventListener("touchend", onTouchEnd);
           window.removeEventListener("resize", onResize);
             if (s.ro) s.ro.disconnect();
             cancelAnimationFrame(s.raf);
@@ -1036,7 +1168,7 @@ export default function HeroMeltWebGL({
         <section
             ref={holdRef}
             style={{
-                height: "180vh",
+        height: "100vh",
                 width: "100%",
                 background: "#000",
                 position: "relative",
@@ -1050,7 +1182,7 @@ export default function HeroMeltWebGL({
             top: 0,
             left: 0,
             right: 0,
-                height: "100vh",
+          height: "100vh",
             width: "100%",
                     background: "#000",
                     display: "flex",

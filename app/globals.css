@@ -13,6 +13,30 @@ body {
   color: #fff;
 }
 
+html,
+body {
+  overflow-x: hidden;
+}
+
+/* Hide scrollbars everywhere (keep scrolling enabled) */
+* {
+  -ms-overflow-style: none; /* IE/Edge legacy */
+  scrollbar-width: none; /* Firefox */
+}
+
+*::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: transparent !important;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
 /* Contact form placeholders: keep them clearly visible */
 .contact-field::placeholder {
   color: #fff;

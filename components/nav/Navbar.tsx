@@ -11,6 +11,7 @@ type NavbarProps = {
   logoAltSrc?: string;
   useAltLogo?: boolean;
   show: boolean;            // controls fade-in (hero can toggle)
+  slideOnHide?: boolean;    // optionally slide upward when hidden
   brandColor?: string;      // menu bg uses this
   items?: NavItem[];
 };
@@ -20,6 +21,7 @@ export default function Navbar({
   logoAltSrc,
   useAltLogo = false,
   show,
+  slideOnHide = false,
   brandColor = "#c6376c",
   items = [
     { label: "HOME", href: "/" },
@@ -80,7 +82,8 @@ export default function Navbar({
           // Only the actual controls (logo + hamburger) should receive pointer events.
           pointerEvents: "none",
           opacity: show ? 1 : 0,
-          transition: "opacity 450ms ease",
+          transform: slideOnHide ? (show ? "translateY(0)" : "translateY(-160px)") : undefined,
+          transition: slideOnHide ? "opacity 450ms ease, transform 450ms ease" : "opacity 450ms ease",
           zIndex: 50,
         }}
       >

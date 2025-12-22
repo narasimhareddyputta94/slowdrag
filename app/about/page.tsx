@@ -1,10 +1,48 @@
 "use client";
 
-import React from "react";
+import { useEffect, useRef, useState } from "react";
 import Navbar from "@/components/nav/Navbar";
+import { offBit, offBitBold } from "@/app/fonts";
 
 export default function AboutPage() {
   const brandColor = "#c6376c";
+  const [showNav, setShowNav] = useState(true);
+  const lastScrollYRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    lastScrollYRef.current = window.scrollY;
+
+    const onScroll = () => {
+      if (rafRef.current != null) return;
+      rafRef.current = window.requestAnimationFrame(() => {
+        rafRef.current = null;
+
+        const currentY = window.scrollY;
+        const prevY = lastScrollYRef.current;
+        const delta = currentY - prevY;
+
+        // Always show near the top
+        if (currentY <= 12) {
+          setShowNav(true);
+        } else if (delta > 8) {
+          // scrolling down
+          setShowNav(false);
+        } else if (delta < -8) {
+          // scrolling up
+          setShowNav(true);
+        }
+
+        lastScrollYRef.current = currentY;
+      });
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (rafRef.current != null) window.cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   // ✅ Reuse the same shape path you finalized for Contact
   // (keep this EXACT string in sync with your contact section)
@@ -16,28 +54,14 @@ L 520.00,170.00
 Q 540.00,170.00 540.00,187.50
 T 560.00,205.00
 T 580.00,222.50
-Q 590.00,240.00 600.00,240.00
+Q 580.00,240.00 600.00,240.00
 L 1150.00,240.00
-Q 1172.43,239.68 1166.88,261.41
+Q 1170.00,240.00 1170.00,257.50
 Q 1171.44,279.14 1153.13,278.91
-Q 1130.71,278.58 1136.25,300.31
-Q 1141.80,322.03 1119.38,321.72
-Q 1096.95,321.40 1102.50,343.13
-Q 1108.04,364.85 1085.63,364.53
-Q 1063.20,364.21 1068.75,385.94
-Q 1074.29,407.66 1051.88,407.34
-Q 1029.45,407.02 1035.00,428.75
-L 900.00,600.00
-L 1250.00,600.00
+Q 1134.81,278.69 1135.63,296.91
+T 1115.00,315.00
 
-L 744.00,600.00
-L 24.00,600.00
-L 0.00,600.00
-L 0.00,274.00
-
-
-L 199.50,40.00
-L 229.50,40.00
+L 295.00,315.00
 Z
 `;
 
@@ -47,15 +71,16 @@ Z
         logoSrc="/images/logo.png"
         logoAltSrc="/images/fulllogo.png"
         useAltLogo={true}
-        show={true}
+        show={showNav}
+        slideOnHide={true}
         brandColor={brandColor}
       />
 
       {/* ===== shape card ===== */}
       <section className="w-full pt-0 pb-14 pl-0 pr-6">
-        <div className="relative w-full">
+        <div className="relative w-full overflow-visible h-[260px] md:h-[600px]">
           {/* this keeps the shape responsive */}
-          <div className="relative w-full overflow-visible -translate-x-[1100px] -translate-y-[620px]">
+          <div className="absolute left-0 top-0 w-full overflow-visible -translate-x-[1100px] -translate-y-[620px]">
             <svg
               viewBox="0 0 1400 600"
               className="block h-auto w-[200vw] max-w-none"
@@ -96,51 +121,53 @@ Z
 
                 {/* dark overlay to push text contrast */}
                 <rect x="0" y="0" width="1400" height="600" fill="rgba(0,0,0,0.35)" />
-
-                {/* ABOUT US pill (inside the box) */}
-                <g>
-                  <text
-                    x="795"
-                    y="108"
-                    textAnchor="middle"
-                    fill="#ffffff"
-                    fontSize="32"
-                    fontWeight="700"
-                    style={{ letterSpacing: "1px" }}
-                  >
-                    ABOUT US
-                  </text>
-                </g>
               </g>
 
-              {/* border stroke for the shape */}
-              <path
-                d={contactShapePath}
-                fill="none"
-                stroke="rgba(255,255,255,0.18)"
-                strokeWidth="2"
-                vectorEffect="non-scaling-stroke"
-                transform="translate(0 600) scale(1 -1)"
-              />
+              {/* ABOUT US heading (drawn on top for reliability) */}
+              <text
+                x="1070"
+                y="345"
+                className={offBit.className}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="#ffffff"
+                fontSize="24"
+                fontWeight="700"
+                style={{ letterSpacing: "1px" }}
+              >
+                ABOUT US
+              </text>
+
+              {/* removed outline stroke (no border lines) */}
             </svg>
           </div>
         </div>
 
-        {/* Text moved outside the box */}
-        <div className="mx-auto mt-10 max-w-[760px] rounded-2xl bg-black/55 px-8 py-7 text-center shadow-[0_0_0_1px_rgba(255,255,255,0.10)] backdrop-blur-sm">
-          <p className="text-sm leading-6 text-white/85">
-            Slow Drag Studio is a design and film studio, but more importantly, we are a practice — a way of working.
+        {/* Text centered below the coloured image (no background / no borders) */}
+        <div className={`${offBit.className} mx-auto mt-6 max-w-7xl px-6 py-16 text-center sm:px-10 sm:py-20 space-y-12`}>
+          <p className="font-normal text-white/90 !text-[30px] !leading-relaxed sm:!text-[34px] lg:!text-[40px]">
+            Slow Drag Studios is a design and film studio but more importantly,
+            <br />
+            a way of working.
           </p>
 
-          <p className="mt-4 text-sm leading-6 text-white/80">
-            We honour process, people, and stories that don’t arrive neatly packaged. Our practice is rooted in emotion:
-            grief, desire, survival, intimacy, and resistance — in the everyday spaces where politics quietly unfolds.
+          <p className="font-normal text-white/90 !text-[30px] !leading-relaxed sm:!text-[34px] lg:!text-[40px]">
+            We honour process, people, and stories that don’t arrive neatly packaged.
           </p>
 
-          <p className="mt-4 text-sm leading-6 text-white/80">
-            We make space for the marginalised, the silenced, the unseen — not as subjects, but as authors of their own image.
+          <p className="font-normal text-white/90 !text-[30px] !leading-relaxed sm:!text-[34px] lg:!text-[40px]">
+            Our practice is rooted in emotion grief, desire, survival, intimacy,
+            <br />
+            and resistance and in the everyday spaces where politics quietly unfolds.
+          </p>
+
+          <p className="font-normal text-white/90 !text-[30px] !leading-relaxed sm:!text-[34px] lg:!text-[40px]">
+            We make space for the marginalised, the silenced, the unseen
+            <br />
+            not as subjects, but as authors of their own image.
           </p>
         </div>
+
       </section>
     </main>
   );
