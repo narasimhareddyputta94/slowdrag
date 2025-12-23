@@ -7,7 +7,6 @@ import FilmsShowcase from "@/components/sections/FilmsShowcase";
 import Manifesto2 from "@/components/sections/Manifesto2";
 import DesignsShowcase from "@/components/sections/DesignsShowcase";
 import Footer from "@/components/footer/Footer";
-
 import HeroMeltWebGL from "@/components/hero/HeroMeltWebGL";
 
 export default function Home() {
@@ -19,12 +18,10 @@ export default function Home() {
   useEffect(() => {
     const el = heroWrapRef.current;
     if (!el) return;
-
     const obs = new IntersectionObserver(
       (entries) => setHeroInView(entries[0]?.isIntersecting ?? true),
       { threshold: 0 }
     );
-
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
@@ -38,15 +35,18 @@ export default function Home() {
         show={showNav}
         brandColor={brandColor}
       />
-      {/* Use SVG for best crispness, PNG also works */}
+      
+      {/* Wrapper to track intersection for nav */}
       <div ref={heroWrapRef}>
         <HeroMeltWebGL
           imageSrc="/images/titleimage.svg"
           onScrolledChange={setShowNav}
           brandColor={brandColor}
           showCaption={showNav}
-        />
+        >
+        </HeroMeltWebGL>
       </div>
+
       <Manifesto />
       <FilmsShowcase />
       <Manifesto2 />

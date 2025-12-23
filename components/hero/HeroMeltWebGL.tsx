@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 type HeroProps = {
   imageSrc: string;
   onScrolledChange?: (scrolled: boolean) => void;
-  brandColor?: string; // sRGB hex (#rrggbb)
+  brandColor?: string;
   showCaption?: boolean;
+  children?: React.ReactNode;
 };
 
 /* ---------------- Color Helpers ---------------- */
@@ -388,10 +389,12 @@ export default function HeroMeltWebGL({
   onScrolledChange,
   brandColor = "#c6376c",
   showCaption = false,
+  children,
 }: HeroProps) {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null); // For Manifesto
 
   const shaders = useMemo(
     () => ({ VERT, MASK_FRAG, RENDER_FRAG, POST_FRAG }),
@@ -431,8 +434,11 @@ export default function HeroMeltWebGL({
     target: 0,
     lastLayoutW: 0,
     lastLayoutH: 0,
-    // VIRTUAL SCROLL STATE
-    virtualY: 0,
+    scrollY: 0, // NATIVE SCROLL POSITION
+    virtualScroll: 0, // used while scroll is locked
+    lockDone: false, // once true, never lock again
+    lockActive: false,
+    lockScrollY: 0,
   });
 
   const loop = () => {
@@ -446,32 +452,45 @@ export default function HeroMeltWebGL({
     s.lastFrameMs = now;
     const anim = (now - s.t0) * 0.001;
 
-    /* ---------------- VIRTUAL SCROLL LOGIC ---------------- */
-    // Reduce max scroll distance slightly so user feels effect faster
-    const MAX_SCROLL = 1600; 
-    
-    // Map to progress
-    const raw = Math.max(0, Math.min(1.0, s.virtualY / MAX_SCROLL));
-    
-    // Target allows slight overscroll for fullness
-    const target = raw * 1.25; 
-    s.target = Math.max(s.target, target);
+    /* ---------------- SCROLL LOGIC ---------------- */
+    // Requirement: do NOT increase the section height.
+    // Instead, keep the hero visually pinned and "lock" scroll input for the first
+    // ~1 viewport worth of wheel/touch movement, using that input to drive the melt.
+    const winH = typeof window !== 'undefined' ? window.innerHeight : 900;
+    const lockDistance = winH; // "half of 200vh" feel without changing layout
 
-    // Tighter dampening (10.0) for "instant" feel
-    const ease = 1.0 - Math.exp(-dt * 10.0); 
+    // While locked, we drive progress from virtualScroll; after unlock, keep it finished.
+    const raw = s.lockDone ? 1.0 : Math.max(0, Math.min(1.0, s.virtualScroll / Math.max(1, lockDistance)));
+    
+    const target = raw * 1.35; // Slight overscroll for fullness
+    s.target = Math.max(s.target, target);
+    
+    // Smooth dampening
+    const ease = 1.0 - Math.exp(-dt * 8.0); 
     s.p += (s.target - s.p) * ease;
 
-    // Hard reset if we are back at top
-    if (s.virtualY <= 0 && s.p < 0.001 && s.hasEverMelted) {
-         resetMelt(gl);
-    }
-    
     if (s.p > 0.001) s.hasEverMelted = true;
-    
-    if (onScrolledChange && raw > 0.01) {
-        onScrolledChange(true);
-    } else if (onScrolledChange && raw <= 0.01) {
-        onScrolledChange(false);
+
+    // Toggle nav/caption based on progress
+    if (onScrolledChange) {
+        if (raw > 0.1) onScrolledChange(true);
+        else onScrolledChange(false);
+    }
+
+    /* ---------------- MANIFESTO REVEAL LOGIC ---------------- */
+    // Sync the Text Reveal directly to the Render Loop for 60fps smoothness
+    if (contentRef.current) {
+        // Text starts appearing when melt is 30% done, finishes at 90%
+        const textProgress = Math.max(0, Math.min(1, (s.p - 0.3) / 0.6));
+        const smoothText = textProgress * textProgress * (3.0 - 2.0 * textProgress);
+        
+        // Parallax: Text rises up 150px as it fades in
+        const yOffset = (1.0 - smoothText) * 150;
+        
+        contentRef.current.style.opacity = smoothText.toFixed(3);
+        contentRef.current.style.transform = `translate3d(0, ${yOffset.toFixed(1)}px, 0)`;
+        // Disable pointer events if not visible so we can click "Contact Us" behind it if needed
+        contentRef.current.style.pointerEvents = smoothText > 0.8 ? "auto" : "none";
     }
 
     /* ---------------- RENDER ---------------- */
@@ -546,57 +565,107 @@ export default function HeroMeltWebGL({
     onScrolledChange?.(false);
   };
 
-  /* ---------------- SCROLL JACK LISTENERS ---------------- */
+  /* ---------------- NATIVE SCROLL LISTENER ---------------- */
   useEffect(() => {
-    const MAX_SCROLL = 1600; 
-    const s = S.current;
+    let fixing = false;
+    const onScroll = () => {
+      const s = S.current;
 
-    const handleWheel = (e: WheelEvent) => {
-        // If animation finished and user scrolls down, let page scroll.
-        if (s.virtualY >= MAX_SCROLL && e.deltaY > 0) return;
-
-        // If user scrolls UP and page is not at top, let page scroll.
-        if (window.scrollY > 0 && e.deltaY < 0) return;
-
-        // Otherwise, JACK THE SCROLL
-        e.preventDefault();
-        
-        const d = e.deltaY;
-        // Accumulate immediately
-        s.virtualY = Math.max(0, Math.min(MAX_SCROLL + 10, s.virtualY + d));
-    };
-
-    let touchStart = 0;
-    const handleTouchStart = (e: TouchEvent) => {
-        touchStart = e.touches[0].clientY;
-    };
-    const handleTouchMove = (e: TouchEvent) => {
-        if (s.virtualY >= MAX_SCROLL && window.scrollY > 0) return;
-        
-        const y = e.touches[0].clientY;
-        const d = touchStart - y; 
-
-        // If at top and scrolling down (or mid animation)
-        if (window.scrollY <= 1) {
-             if (s.virtualY >= MAX_SCROLL && d > 0) return; // let go
-             
-             if (e.cancelable) e.preventDefault();
-             s.virtualY = Math.max(0, Math.min(MAX_SCROLL + 10, s.virtualY + d * 2.5));
-             touchStart = y;
+      // While locked, force the page to stay at the lock position.
+      if (s.lockActive && !s.lockDone) {
+        const diff = Math.abs(window.scrollY - s.lockScrollY);
+        if (!fixing && diff > 0.5) {
+          fixing = true;
+          window.scrollTo(0, s.lockScrollY);
+          requestAnimationFrame(() => {
+            fixing = false;
+          });
         }
+        s.scrollY = s.lockScrollY;
+        return;
+      }
+
+      s.scrollY = window.scrollY;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Scroll-lock: intercept wheel/touch while hero is on screen.
+  useEffect(() => {
+    const s = S.current;
+    let lastTouchY = 0;
+
+    const shouldLockNow = () => {
+      if (s.lockDone) return false;
+      const el = containerRef.current;
+      if (!el) return false;
+      const winH = window.innerHeight || 900;
+      const rect = el.getBoundingClientRect();
+      // Lock only while the hero is essentially the active section.
+      return rect.top <= 0 && rect.bottom >= winH * 0.85;
     };
 
-    window.addEventListener('wheel', handleWheel, { passive: false });
-    window.addEventListener('touchstart', handleTouchStart, { passive: true });
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    const applyDelta = (dy: number) => {
+      const winH = window.innerHeight || 900;
+      const lockDistance = winH;
+      s.virtualScroll = Math.max(0, Math.min(lockDistance, s.virtualScroll + dy));
+      if (s.virtualScroll >= lockDistance - 0.5) {
+        s.lockDone = true;
+        s.lockActive = false;
+      }
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (!shouldLockNow()) return;
+      if (!s.lockActive) {
+        s.lockActive = true;
+        s.lockScrollY = window.scrollY;
+      }
+      // Prevent page from moving while we drive the melt.
+      e.preventDefault();
+      applyDelta(e.deltaY);
+      if (Math.abs(window.scrollY - s.lockScrollY) > 0.5) window.scrollTo(0, s.lockScrollY);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (shouldLockNow() && !s.lockActive) {
+        s.lockActive = true;
+        s.lockScrollY = window.scrollY;
+      }
+      lastTouchY = e.touches[0]?.clientY ?? 0;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!shouldLockNow()) return;
+      if (!s.lockActive) {
+        s.lockActive = true;
+        s.lockScrollY = window.scrollY;
+      }
+      const y = e.touches[0]?.clientY ?? lastTouchY;
+      const dy = lastTouchY - y;
+      lastTouchY = y;
+      e.preventDefault();
+      applyDelta(dy);
+      if (Math.abs(window.scrollY - s.lockScrollY) > 0.5) window.scrollTo(0, s.lockScrollY);
+    };
+
+    const prevOverscroll = document.documentElement.style.overscrollBehaviorY;
+    document.documentElement.style.overscrollBehaviorY = 'none';
+
+    window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
 
     return () => {
-        window.removeEventListener('wheel', handleWheel);
-        window.removeEventListener('touchstart', handleTouchStart);
-        window.removeEventListener('touchmove', handleTouchMove);
+      document.documentElement.style.overscrollBehaviorY = prevOverscroll;
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
     };
   }, []);
 
+  /* ---------------- WEBGL INIT ---------------- */
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -706,9 +775,9 @@ export default function HeroMeltWebGL({
         if (!canvas.parentElement) return;
         const rect = canvas.parentElement.getBoundingClientRect();
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        // On mobile, scroll bars might trigger resize events, ignore small ones
         if (Math.abs(rect.width - s.lastLayoutW) < 1 && Math.abs(rect.height - s.lastLayoutH) < 1) return;
-        const isMobileVerticalShift = Math.abs(rect.width - s.lastLayoutW) < 1 && Math.abs(rect.height - s.lastLayoutH) > 0;
-        if (isMobileVerticalShift && s.lastLayoutW > 0) return;
+        
         s.lastLayoutW = rect.width;
         s.lastLayoutH = rect.height;
         canvas.width = Math.floor(rect.width * dpr);
@@ -717,34 +786,20 @@ export default function HeroMeltWebGL({
         canvas.style.height = `${rect.height}px`;
         const W = canvas.width;
         const H = canvas.height;
-        const preserve = s.p > 0.01 && !!s.maskTexA;
         const replaceTex = (oldTex: WebGLTexture|null) => { if(oldTex) gl.deleteTexture(oldTex); return makeTex(gl, W, H); };
         const replaceFB = (oldFB: WebGLFramebuffer|null, tex: WebGLTexture) => { if(oldFB) gl.deleteFramebuffer(oldFB); return attachFB(gl, tex); };
-        const oldMask = s.ping === 0 ? s.maskTexA : s.maskTexB;
-        const newMaskA = makeTex(gl, W, H);
-        const newMaskB = makeTex(gl, W, H);
-        const newFBA = newMaskA ? attachFB(gl, newMaskA) : null;
-        const newFBB = newMaskB ? attachFB(gl, newMaskB) : null;
-        if (newFBA && newFBB && preserve && oldMask && s.blitProg && s.u_blit) {
-            gl.viewport(0, 0, W, H);
-            gl.disable(gl.BLEND);
-            gl.useProgram(s.blitProg);
-            gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, oldMask); gl.uniform1i(s.u_blit, 0);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, newFBA); gl.drawArrays(gl.TRIANGLES, 0, 3);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, newFBB); gl.drawArrays(gl.TRIANGLES, 0, 3);
-        } else if (newFBA && newFBB) {
-             gl.bindFramebuffer(gl.FRAMEBUFFER, newFBA); gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
-             gl.bindFramebuffer(gl.FRAMEBUFFER, newFBB); gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
-        }
+        
         if(s.maskTexA) gl.deleteTexture(s.maskTexA);
         if(s.maskTexB) gl.deleteTexture(s.maskTexB);
         if(s.fbA) gl.deleteFramebuffer(s.fbA);
         if(s.fbB) gl.deleteFramebuffer(s.fbB);
-        s.maskTexA = newMaskA;
-        s.maskTexB = newMaskB;
-        s.fbA = newFBA;
-        s.fbB = newFBB;
+        
+        s.maskTexA = makeTex(gl, W, H);
+        s.maskTexB = makeTex(gl, W, H);
+        s.fbA = s.maskTexA ? attachFB(gl, s.maskTexA) : null;
+        s.fbB = s.maskTexB ? attachFB(gl, s.maskTexB) : null;
         s.ping = 0;
+        
         if (s.sceneTex) gl.deleteTexture(s.sceneTex);
         if (s.sceneFB) gl.deleteFramebuffer(s.sceneFB);
         s.sceneTex = makeTex(gl, W, H);
@@ -767,7 +822,7 @@ export default function HeroMeltWebGL({
     <section
       ref={containerRef}
       style={{
-        height: "100vh", 
+        height: "100vh", // keep layout 100vh; scroll-lock simulates extra travel
         width: "100%",
         background: "#000",
         position: "relative",
@@ -775,15 +830,17 @@ export default function HeroMeltWebGL({
     >
       <div
         style={{
-          position: "relative",
+          position: "sticky", // Pin the content while scrolling
+          top: 0,
           width: "100%",
-          height: "100%",
+          height: "100vh",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           overflow: "hidden",
         }}
       >
+        {/* Caption and Contact button */}
         <div
           aria-hidden={!showCaption}
           style={{
@@ -795,13 +852,12 @@ export default function HeroMeltWebGL({
             opacity: showCaption ? 1 : 0,
             transition: "opacity 450ms ease",
             color: "#fff",
-            fontFamily: "var(--font-offbit), ui-monospace, SFMono-Regular, monospace",
+            fontFamily: "var(--font-offbit), monospace",
             textTransform: "uppercase",
             letterSpacing: "0.14em",
             lineHeight: 1.15,
             fontSize: "clamp(22px, 2.2vw, 34px)",
             whiteSpace: "pre-line",
-            mixBlendMode: "normal",
           }}
         >
           {"\u201cIMAGES BREATHE\nBEFORE THEY\nSPEAK\u201d"}
@@ -819,14 +875,13 @@ export default function HeroMeltWebGL({
             opacity: showCaption ? 1 : 0,
             transition: "opacity 450ms ease",
             color: "#fff",
-            fontFamily: "var(--font-offbit), ui-monospace, SFMono-Regular, monospace",
+            fontFamily: "var(--font-offbit), monospace",
             textTransform: "uppercase",
             letterSpacing: "0.14em",
             lineHeight: 1.15,
             fontSize: "clamp(18px, 1.8vw, 28px)",
             whiteSpace: "pre-line",
             textAlign: "right",
-            mixBlendMode: "normal",
           }}
         >
           {"RHYTHM\nRESISTANCE.\nREMEMBRANCE,"}
@@ -849,7 +904,7 @@ export default function HeroMeltWebGL({
             borderRadius: 999,
             padding: "10px 18px",
             color: "#fff",
-            fontFamily: "var(--font-offbit), ui-monospace, SFMono-Regular, monospace",
+            fontFamily: "var(--font-offbit), monospace",
             textTransform: "uppercase",
             letterSpacing: "0.14em",
             fontSize: "clamp(14px, 1.2vw, 18px)",
@@ -860,6 +915,27 @@ export default function HeroMeltWebGL({
           CONTACT US
         </button>
 
+        {/* MANIFESTO TEXT CONTAINER (Controlled by WebGL Loop) */}
+        <div 
+            ref={contentRef}
+            style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 5, // Above Canvas
+                opacity: 0, // Controlled by JS
+                pointerEvents: "none",
+                willChange: "transform, opacity",
+            }}
+        >
+            {children}
+        </div>
+
         <div
           style={{
             width: "100%",
@@ -869,6 +945,7 @@ export default function HeroMeltWebGL({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            zIndex: 1, 
           }}
         >
           <canvas
