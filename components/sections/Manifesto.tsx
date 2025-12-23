@@ -4,7 +4,7 @@ export default function Manifesto() {
       aria-label="Manifesto"
       style={{
         minHeight: "70vh",
-        background: "#000",
+        background: "transparent",
         color: "#eaeaea",
         display: "grid",
         placeItems: "center",

@@ -26,7 +26,6 @@ export default function Navbar({
   items = [
     { label: "HOME", href: "/" },
     { label: "ABOUT", href: "/about" },
-    { label: "WORK", href: "/work" },
     { label: "CONTACT", href: "/contact" },
   ],
 }: NavbarProps) {
@@ -113,12 +112,9 @@ export default function Navbar({
                 objectFit: "contain",
                 userSelect: "none",
                 opacity: useAltLogo ? 0 : 1,
-                transform: useAltLogo
-                  ? "translate3d(0,-1px,0) scale(0.992)"
-                  : "translate3d(0,0,0) scale(1)",
                 transition:
-                  "opacity 850ms cubic-bezier(0.16, 1, 0.3, 1), transform 850ms cubic-bezier(0.16, 1, 0.3, 1)",
-                willChange: "opacity, transform",
+                  "opacity 850ms cubic-bezier(0.16, 1, 0.3, 1)",
+                willChange: "opacity",
               }}
             />
             {logoAltSrc ? (
@@ -132,12 +128,9 @@ export default function Navbar({
                   objectFit: "contain",
                   userSelect: "none",
                   opacity: useAltLogo ? 1 : 0,
-                  transform: useAltLogo
-                    ? "translate3d(0,0,0) scale(1)"
-                    : "translate3d(0,1px,0) scale(1.008)",
                   transition:
-                    "opacity 850ms cubic-bezier(0.16, 1, 0.3, 1) 60ms, transform 850ms cubic-bezier(0.16, 1, 0.3, 1) 60ms",
-                  willChange: "opacity, transform",
+                    "opacity 850ms cubic-bezier(0.16, 1, 0.3, 1) 60ms",
+                  willChange: "opacity",
                 }}
               />
             ) : null}
