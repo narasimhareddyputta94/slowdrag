@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Navbar from "@/components/nav/Navbar";
-import Manifesto from "@/components/sections/Manifesto";
 import FilmsShowcase from "@/components/sections/FilmsShowcase";
 import Manifesto2 from "@/components/sections/Manifesto2";
 import DesignsShowcase from "@/components/sections/DesignsShowcase";
+import RotatedVideoSection from "@/components/sections/RotatedVideoSection";
 import Footer from "@/components/footer/Footer";
 import HeroMeltWebGL from "@/components/hero/HeroMeltWebGL";
+import ManifestoMeltWebGLPage from "./manifestomeltwebgl/page";
 
 export default function Home() {
   const [showNav, setShowNav] = useState(false);
@@ -47,10 +48,11 @@ export default function Home() {
         </HeroMeltWebGL>
       </div>
 
-      <Manifesto />
+<ManifestoMeltWebGLPage />
       <FilmsShowcase />
       <Manifesto2 />
       <DesignsShowcase />
+      <RotatedVideoSection />
       <Footer />
     </main>
   );

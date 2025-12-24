@@ -6,6 +6,10 @@
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: 0, 0, 0;
   --background-end-rgb: 0, 0, 0;
+
+  /* Shared “flow” / brand color used by Hero melt + Manifesto text */
+  --flow-color: #c6376c;
+  --flow-color-rgb: 198 55 108;
 }
 
 body {
@@ -47,5 +51,55 @@ body {
   color: #fff;
 }
 
+/* ---------------- Manifesto: optional melt shading on letters ---------------- */
+/* Only enable if you intentionally set data-meltfill="1" */
+section[aria-label="Manifesto"][data-meltfill="1"] .manifesto-copy,
+section[aria-label="Manifesto"][data-meltfill="1"] .manifesto-copy .manifesto-strong {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
 
+  /* Slight edge definition to sell a “cutout/holes” feel without shadows */
+  -webkit-text-stroke: 1px var(--mf-stroke, rgb(var(--foreground-rgb) / 0.12));
 
+  background-image: var(
+    --manifesto-fill,
+    radial-gradient(140% 120% at 50% 0%, rgb(var(--flow-color-rgb) / 0.95) 0%, rgb(var(--flow-color-rgb) / 0) 72%),
+    radial-gradient(120% 110% at 50% 0%, rgb(var(--flow-color-rgb) / 0.18) 0%, rgb(var(--flow-color-rgb) / 0) 62%),
+    repeating-linear-gradient(90deg, rgb(var(--flow-color-rgb) / 0.38) 0px, rgb(var(--flow-color-rgb) / 0.38) 10px, rgb(var(--flow-color-rgb) / 0.10) 18px, rgb(var(--flow-color-rgb) / 0) 30px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.08) 0%, rgb(var(--flow-color-rgb) / 0.80) 32%, rgb(var(--flow-color-rgb) / 0.80) 68%, rgb(255 255 255 / 0.12) 100%),
+    repeating-radial-gradient(circle at 50% 0%, rgb(255 255 255 / 0.06) 0 1px, rgb(255 255 255 / 0) 7px 18px),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.08) 0 1px, rgb(255 255 255 / 0) 6px 18px),
+    conic-gradient(from 0deg at 50% 2%, rgb(255 255 255 / 0.08) 0deg, rgb(255 255 255 / 0) 70deg, rgb(255 255 255 / 0.04) 140deg, rgb(255 255 255 / 0) 220deg, rgb(255 255 255 / 0.08) 360deg)
+  );
+  /* Parallax sizing per layer (spot / cloud / lanes / shimmer / caustics / current / eddy) */
+  background-size:
+    var(--mf-size1, 220% 220%),
+    var(--mf-size1, 220% 220%),
+    var(--mf-size2, 260% 220%),
+    var(--mf-size2, 260% 220%),
+    var(--mf-size3, 300% 240%),
+    var(--mf-size4, 260% 220%),
+    var(--mf-size5, 360% 320%),
+    var(--mf-size6, 260% 320%),
+    var(--mf-size7, 280% 240%);
+  background-position:
+    var(--mf-pos1, 50% 0%),
+    var(--mf-pos1b, 50% 0%),
+    var(--mf-pos2, 50% 0%),
+    var(--mf-pos2b, 50% 0%),
+    var(--mf-pos3, 50% 0%),
+    var(--mf-pos4, 50% 0%),
+    var(--mf-pos5, 50% 0%),
+    var(--mf-pos6, 50% 0%),
+    var(--mf-pos7, 50% 0%);
+  background-repeat: no-repeat;
+
+  /* Make layered gradients feel more “liquid” and less flat */
+  background-blend-mode: screen, screen, screen, screen, multiply, overlay, screen, soft-light, screen;
+
+  /* Tiny global boost (still only using the same colors) */
+  filter: contrast(1.04) saturate(1.04);
+
+  -webkit-background-clip: text;
+  background-clip: text;
+}

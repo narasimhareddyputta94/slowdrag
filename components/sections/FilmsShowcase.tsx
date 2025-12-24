@@ -71,12 +71,29 @@ export default function FilmsShowcase() {
   const tealColor = "#6fe7d3";
 
   const films: FilmItem[] = useMemo(
-    () => [
-      { title: "Advertisements", src: "/videos/ads.mp4" },
-      { title: "Brand Films", src: "/videos/brand-films.mp4" },
-      { title: "Documentaries", src: "/videos/documentaries.mp4" },
-      { title: "Short Films", src: "/videos/short-films.mp4" },
-    ],
+    () => {
+      const videoFiles = [
+        "1.mp4",
+        "Coming Home.mov",
+        "Different Versions - More Blocks.mp4",
+        "Different Versions - Yellow 2 - HQ.mp4",
+        "Fragments 2.mp4",
+        "Memory Playback.mp4",
+        "Overflow - Compressed.mp4",
+        "Shatakshi Polaroidder.mp4",
+        "Versions.mp4",
+        "video1.mp4",
+        "video2.mp4",
+        "video3.mp4",
+        "video4.mp4",
+        "video5.mp4",
+      ].sort((a, b) => a.localeCompare(b));
+
+      return videoFiles.map((name) => ({
+        title: name.replace(/\.[^./]+$/, ""),
+        src: `/videos/${encodeURIComponent(name)}`,
+      }));
+    },
     []
   );
 
@@ -290,10 +307,10 @@ export default function FilmsShowcase() {
                     src={active.src}
                     poster={active.poster}
                     muted={muted}
-                    loop
                     playsInline
                     autoPlay
                     preload="metadata"
+                    onEnded={next}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     onCanPlay={() => {
@@ -308,7 +325,8 @@ export default function FilmsShowcase() {
                     style={{
                       width: "100%",
                       height: "100%",
-                      objectFit: "cover",
+                      objectFit: "contain",
+                      objectPosition: "center",
                       display: "block",
                       opacity: videoOpacity,
                       transition: "opacity 280ms ease",
@@ -456,35 +474,18 @@ export default function FilmsShowcase() {
           {/* Bottom Left Menu */}
           <div
             data-player-control
-            className="absolute bottom-[2%] left-[1%] z-30 flex flex-col items-start w-[260px] rounded-xl px-3 py-2"
-            style={{ left: "-80px",  bottom:"-15px"}}
+            className="absolute bottom-[2%] left-[1%] z-30 flex flex-col items-start w-[220px] rounded-xl px-3 py-2"
+            style={{ left: "-80px", bottom:"-15px"}}
           >
-            <h3
-              className="text-[20px] font-normal tracking-[0.1em] mb-2 text-gray-300"
+            <div
+              className="text-[24px] leading-[1.05] font-normal tracking-[0.02em] text-white"
               style={{ textShadow: "0 2px 4px rgba(180, 0, 0, 0.9)" }}
             >
-              We work across:
-            </h3>
-
-            <div className="flex flex-col w-full gap-1">
-              {films.map((f, i) => (
-                <button
-                  key={f.src}
-                  type="button"
-                  onClick={() => requestIndex(i)}
-                  className="w-full text-left py-1 text-[20px] font-normal tracking-[0.05em] transition-all duration-200 ease-in-out flex items-center gap-2 hover:brightness-225  bg-transparent border-none"
-                  style={{
-                    color: "#d1d5db",
-                    textShadow:
-                      i === activeIndex
-                        ? `0 0 10px rgba(198, 55, 108, 0.90), 0 0 16px rgba(198, 55, 108, 0.55)`
-                        : "0 2px 4px rgba(180, 0, 0, 0.9)",
-                  }}
-                >
-                  <span className="opacity-80">—</span>
-                  {f.title}
-                </button>
-              ))}
+              <div>We work across</div>
+              <div>narrative</div>
+              <div>experimental films,</div>
+              <div>commercials & films,</div>
+              <div>documentaries</div>
             </div>
           </div>
         </div>

@@ -76,6 +76,24 @@ function attachFB(gl: WebGLRenderingContext, tex: WebGLTexture) {
   return fb;
 }
 
+function hexToRgb(hex: string) {
+  const h = hex.replace("#", "").trim();
+  const v = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = /^[0-9a-fA-F]{6}$/.test(v) ? v : "c6376c";
+  return {
+    r: parseInt(n.slice(0, 2), 16),
+    g: parseInt(n.slice(2, 4), 16),
+    b: parseInt(n.slice(4, 6), 16),
+  };
+}
+
+function rgbaFromHex(hex: string, a: number) {
+  const { r, g, b } = hexToRgb(hex);
+  const aa = Math.max(0, Math.min(1, a));
+  return `rgba(${r}, ${g}, ${b}, ${aa})`;
+}
+
+
 /* ---------------- Shaders ---------------- */
 const BLIT_FRAG = `precision highp float; uniform sampler2D u_tex; varying vec2 v_uv; void main(){ gl_FragColor = texture2D(u_tex, v_uv); }`;
 const VERT = `attribute vec2 a_pos; varying vec2 v_uv; void main() { v_uv = a_pos * 0.5 + 0.5; gl_Position = vec4(a_pos, 0.0, 1.0); }`;
@@ -395,12 +413,21 @@ export default function HeroMeltWebGL({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null); // For Manifesto
+  const loopRef = useRef<(() => void) | null>(null);
 
   const shaders = useMemo(
     () => ({ VERT, MASK_FRAG, RENDER_FRAG, POST_FRAG }),
     []
   );
   const brandLin = useMemo(() => hexToLinearRgb(brandColor), [brandColor]);
+
+  // Keep a shared CSS variable in sync so other pages/sections can match the flow hue.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const { r, g, b } = hexToRgb(brandColor);
+    document.documentElement.style.setProperty("--flow-color", brandColor);
+    document.documentElement.style.setProperty("--flow-color-rgb", `${r} ${g} ${b}`);
+  }, [brandColor]);
 
   // Main state ref
   const S = useRef({
@@ -425,7 +452,7 @@ export default function HeroMeltWebGL({
     raf: 0,
     t0: 0,
     lastFrameMs: 0,
-    seed: Math.random() * 1000,
+    seed: 0,
     loaded: false,
     imgW: 1,
     imgH: 1,
@@ -441,115 +468,262 @@ export default function HeroMeltWebGL({
     lockScrollY: 0,
   });
 
-  const loop = () => {
-    const s = S.current;
-    const gl = s.gl;
-    if (!gl || !s.loaded || !s.maskProg || !s.renderProg || !s.postProg) return;
+  // Create the RAF loop after mount to keep the component render pure.
+  useEffect(() => {
+    loopRef.current = () => {
+      const s = S.current;
+      const gl = s.gl;
+      if (!gl || !s.loaded || !s.maskProg || !s.renderProg || !s.postProg) return;
 
-    const now = performance.now();
-    if (!s.lastFrameMs) s.lastFrameMs = now;
-    const dt = Math.max(0, Math.min(0.06, (now - s.lastFrameMs) * 0.001));
-    s.lastFrameMs = now;
-    const anim = (now - s.t0) * 0.001;
+      const now = performance.now();
+      if (!s.lastFrameMs) s.lastFrameMs = now;
+      const dt = Math.max(0, Math.min(0.06, (now - s.lastFrameMs) * 0.001));
+      s.lastFrameMs = now;
+      const anim = (now - s.t0) * 0.001;
 
-    /* ---------------- SCROLL LOGIC ---------------- */
-    // Requirement: do NOT increase the section height.
-    // Instead, keep the hero visually pinned and "lock" scroll input for the first
-    // ~1 viewport worth of wheel/touch movement, using that input to drive the melt.
-    const winH = typeof window !== 'undefined' ? window.innerHeight : 900;
-    const lockDistance = winH; // "half of 200vh" feel without changing layout
+      /* ---------------- SCROLL LOGIC ---------------- */
+      // Requirement: do NOT increase the section height.
+      // Instead, keep the hero visually pinned and "lock" scroll input for the first
+      // ~1 viewport worth of wheel/touch movement, using that input to drive the melt.
+      const winH = typeof window !== "undefined" ? window.innerHeight : 900;
+      const lockDistance = winH; // "half of 200vh" feel without changing layout
 
-    // While locked, we drive progress from virtualScroll; after unlock, keep it finished.
-    const raw = s.lockDone ? 1.0 : Math.max(0, Math.min(1.0, s.virtualScroll / Math.max(1, lockDistance)));
-    
-    const target = raw * 1.35; // Slight overscroll for fullness
-    s.target = Math.max(s.target, target);
-    
-    // Smooth dampening
-    const ease = 1.0 - Math.exp(-dt * 8.0); 
-    s.p += (s.target - s.p) * ease;
+      // While locked, we drive progress from virtualScroll; after unlock, keep it finished.
+      const raw = s.lockDone
+        ? 1.0
+        : Math.max(0, Math.min(1.0, s.virtualScroll / Math.max(1, lockDistance)));
 
-    if (s.p > 0.001) s.hasEverMelted = true;
+      const target = raw * 1.35; // Slight overscroll for fullness
+      s.target = Math.max(s.target, target);
 
-    // Toggle nav/caption based on progress
-    if (onScrolledChange) {
+      // Smooth dampening
+      const ease = 1.0 - Math.exp(-dt * 8.0);
+      s.p += (s.target - s.p) * ease;
+
+      if (s.p > 0.001) s.hasEverMelted = true;
+
+      // Toggle nav/caption based on progress
+      if (onScrolledChange) {
         if (raw > 0.1) onScrolledChange(true);
         else onScrolledChange(false);
-    }
+      }
 
-    /* ---------------- MANIFESTO REVEAL LOGIC ---------------- */
-    // Sync the Text Reveal directly to the Render Loop for 60fps smoothness
-    if (contentRef.current) {
+      /* ---------------- MANIFESTO REVEAL LOGIC ---------------- */
+      // Sync the Text Reveal directly to the Render Loop for 60fps smoothness
+      if (contentRef.current) {
+        // Grab Manifesto either inside children OR on the page below
+        const manifestoSection =
+          (contentRef.current.querySelector(
+            'section[aria-label="Manifesto"]'
+          ) as HTMLElement | null) ||
+          (typeof document !== "undefined"
+            ? (document.querySelector(
+                'section[aria-label="Manifesto"]'
+              ) as HTMLElement | null)
+            : null);
+
+        if (manifestoSection) {
+          // Treat this section like a black board behind “cutout” text
+          manifestoSection.style.backgroundColor = "#000";
+
+          // Natural diffusion: ink-drop-in-water feel (slower, organic spread).
+          const COLOR_START = 0.62;
+          const COLOR_SPAN = 0.95;
+
+          const mixT = Math.max(0, Math.min(1, (s.p - COLOR_START) / COLOR_SPAN));
+          const tSmooth = mixT * mixT * (3.0 - 2.0 * mixT);
+
+          // Water-like flowing fill: starts at top-center and slowly sweeps down.
+          // We reveal it by increasing alpha (tSmooth) to match the melt timing.
+          const baseAlpha = tSmooth;
+          const strongAlpha = tSmooth;
+
+          const baseMolten = rgbaFromHex(brandColor, baseAlpha);
+          const strongMolten = rgbaFromHex(brandColor, strongAlpha);
+
+          const whiteA1 = Math.max(0, Math.min(1, 0.16 * tSmooth));
+          const whiteA2 = Math.max(0, Math.min(1, 0.08 * tSmooth));
+
+          // Ink-drop diffusion: radius grows ~sqrt(t), with soft rings.
+          const diff = Math.sqrt(Math.max(0, Math.min(1, mixT)));
+          const spotY = -10 + diff * 78; // percent, starts near top-center
+          const coreA = Math.max(0, Math.min(1, 0.95 * diff));
+          const midA = Math.max(0, Math.min(1, 0.55 * diff));
+          const haloA = Math.max(0, Math.min(1, 0.18 * diff));
+
+          const spot = `radial-gradient(140% 120% at 50% ${spotY}%, ${rgbaFromHex(brandColor, coreA)} 0%, ${rgbaFromHex(brandColor, midA)} 18%, ${rgbaFromHex(brandColor, haloA)} 44%, ${rgbaFromHex(brandColor, 0)} 72%)`;
+
+          // Secondary cloud to mimic diffusion “billow”
+          const cloud = `radial-gradient(120% 110% at 50% ${Math.max(-6, spotY - 8)}%, ${rgbaFromHex(brandColor, haloA)} 0%, ${rgbaFromHex(brandColor, 0)} 62%)`;
+
+          // Gentle flow lanes (subtle, like currents in water)
+          // Use larger spacing + softer opacity to avoid obvious “striping”.
+          const laneA = Math.max(0, Math.min(1, 0.38 * diff));
+          const laneSoft = Math.max(0, laneA * 0.18);
+          const lanes = `repeating-linear-gradient(90deg, ${rgbaFromHex(brandColor, laneA)} 0px, ${rgbaFromHex(brandColor, laneA)} 22px, ${rgbaFromHex(brandColor, laneSoft)} 46px, ${rgbaFromHex(brandColor, 0)} 120px)`;
+          const shimmer = `linear-gradient(90deg, rgba(255,255,255,${whiteA2}) 0%, ${rgbaFromHex(brandColor, Math.min(1, 0.72 * diff))} 34%, ${rgbaFromHex(brandColor, Math.min(1, 0.72 * diff))} 66%, rgba(255,255,255,${whiteA1}) 100%)`;
+
+          // “Caustics” micro ripples (soft, larger scale to feel less procedural)
+          const caustA = Math.max(0, Math.min(1, 0.10 * diff));
+          const caust = `repeating-radial-gradient(circle at 50% 0%, rgba(255,255,255,${caustA}) 0 1px, rgba(255,255,255,0) 12px 36px)`;
+
+          // A readable but not harsh “current” texture
+          // Use thicker, more spaced highlights to avoid barcode-like lines.
+          const currentA = Math.max(0, Math.min(1, 0.09 * diff));
+          const current = `repeating-linear-gradient(0deg, rgba(255,255,255,${currentA}) 0 2px, rgba(255,255,255,${currentA * 0.35}) 12px, rgba(255,255,255,0) 44px 140px)`;
+
+          // Subtle eddy near the top-center (natural swirl)
+          // Keep it very soft so it doesn't read as a hard “pie slice”.
+          const eddyA = Math.max(0, Math.min(1, 0.06 * diff));
+          const eddy = `conic-gradient(from ${((anim * 7.0) % 360).toFixed(1)}deg at 50% 2%, rgba(255,255,255,${eddyA}) 0deg, rgba(255,255,255,0) 95deg, rgba(255,255,255,${eddyA * 0.30}) 170deg, rgba(255,255,255,0) 255deg, rgba(255,255,255,${eddyA}) 360deg)`;
+
+          // Multi-layer "liquid behind cutout text"
+          // (Order matters because blend-modes are set in CSS.)
+          const fill = [spot, cloud, lanes, shimmer, caust, current, eddy].join(", ");
+
+          // Animate the *positions* so it feels like liquid running downward behind cutouts.
+          // After full spread (tSmooth≈1), keep motion alive via anim-driven drift.
+          const wobX1 = Math.sin(anim * 0.42 + s.seed * 0.01) * 6.0; // spot
+          const wobX2 = Math.sin(anim * 0.33 + 1.7 + s.seed * 0.02) * 8.0; // cloud
+          const wobX3 = Math.sin(anim * 0.22 + 3.1 + s.seed * 0.03) * 4.0; // lanes
+          const wobX4 = Math.sin(anim * 0.48 + 0.9 + s.seed * 0.015) * 10.0; // shimmer
+          const wobX5 = Math.sin(anim * 0.55 + 0.4 + s.seed * 0.011) * 12.0; // caust
+          const wobX6 = Math.sin(anim * 0.18 + 2.2 + s.seed * 0.017) * 3.0; // current
+          const wobX7 = Math.sin(anim * 0.28 + 0.2 + s.seed * 0.021) * 5.0; // eddy
+
+          const driftY1 = (anim * 6.0) % 220;
+          const driftY2 = (anim * 4.5) % 220;
+          const driftY3 = (anim * 7.5) % 220;
+          const driftY4 = (anim * 10.0) % 220;
+          const driftY5 = (anim * 5.0) % 220;
+          const driftY6 = (anim * 12.5) % 220;
+          const driftY7 = (anim * 3.6) % 220;
+          const baseY = tSmooth * 105;
+          const baseY2 = tSmooth * 95;
+          const flowY1 = (baseY + driftY1) % 220;
+          const flowY2 = (baseY2 + driftY2) % 220;
+          const flowY3 = (baseY * 0.95 + driftY3) % 220;
+          const flowY4 = (baseY * 0.85 + driftY4) % 220;
+          const flowY5 = (baseY * 0.70 + driftY5) % 220;
+          const flowY6 = (baseY * 1.10 + driftY6) % 220;
+          const flowY7 = (baseY * 0.25 + driftY7) % 220;
+
+          // Layer order: spot(1), cloud(2), lanes(3), shimmer(4), caust(5), current(6), eddy(7)
+          manifestoSection.style.setProperty("--mf-pos1", `${50 + wobX1}% ${Math.max(0, flowY1 - 24)}%`);
+          manifestoSection.style.setProperty("--mf-pos2", `${50 + wobX2}% ${Math.max(0, flowY2 - 18)}%`);
+          manifestoSection.style.setProperty("--mf-pos3", `${50 + wobX3}% ${Math.max(0, flowY3 - 10)}%`);
+          manifestoSection.style.setProperty("--mf-pos4", `${50 + wobX4}% ${flowY4}%`);
+          manifestoSection.style.setProperty("--mf-pos5", `${50 + wobX5}% ${flowY5}%`);
+          manifestoSection.style.setProperty("--mf-pos6", `${50 + wobX6}% ${flowY6}%`);
+          manifestoSection.style.setProperty("--mf-pos7", `${50 + wobX7}% ${Math.max(0, flowY7 - 4)}%`);
+
+          // Subtle size breathing to mimic liquid pressure changes
+          const breathe = 1 + Math.sin(anim * 0.30) * 0.035;
+          const breathe2 = 1 + Math.sin(anim * 0.24 + 1.4) * 0.045;
+          manifestoSection.style.setProperty("--mf-size1", `${Math.round(220 * breathe)}% ${Math.round(220 * breathe)}%`);
+          manifestoSection.style.setProperty("--mf-size2", `${Math.round(260 * breathe2)}% ${Math.round(220 * breathe)}%`);
+          manifestoSection.style.setProperty("--mf-size3", `${Math.round(300 * breathe2)}% ${Math.round(240 * breathe)}%`);
+          manifestoSection.style.setProperty("--mf-size4", `${Math.round(260 * breathe)}% ${Math.round(220 * breathe2)}%`);
+          manifestoSection.style.setProperty("--mf-size5", `${Math.round(360 * breathe2)}% ${Math.round(320 * breathe2)}%`);
+          manifestoSection.style.setProperty("--mf-size6", `${Math.round(260 * breathe)}% ${Math.round(320 * breathe2)}%`);
+          manifestoSection.style.setProperty("--mf-size7", `${Math.round(280 * breathe2)}% ${Math.round(240 * breathe)}%`);
+
+          // Subtle edge strength increase as the highlight spreads
+          const strokeA = 0.10 + 0.14 * diff;
+          manifestoSection.style.setProperty("--mf-stroke", `rgb(255 255 255 / ${strokeA.toFixed(3)})`);
+
+          manifestoSection.style.setProperty("--manifesto-color", baseMolten);
+          manifestoSection.style.setProperty("--manifesto-strong", strongMolten);
+          manifestoSection.style.setProperty("--manifesto-fill", fill);
+
+          // Fallback: in case vars don’t cascade for any reason
+          manifestoSection.style.color = baseMolten;
+        }
+
         // Text starts appearing when melt is 30% done, finishes at 90%
         const textProgress = Math.max(0, Math.min(1, (s.p - 0.3) / 0.6));
         const smoothText = textProgress * textProgress * (3.0 - 2.0 * textProgress);
-        
+
         // Parallax: Text rises up 150px as it fades in
         const yOffset = (1.0 - smoothText) * 150;
-        
+
         contentRef.current.style.opacity = smoothText.toFixed(3);
         contentRef.current.style.transform = `translate3d(0, ${yOffset.toFixed(1)}px, 0)`;
-        // Disable pointer events if not visible so we can click "Contact Us" behind it if needed
         contentRef.current.style.pointerEvents = smoothText > 0.8 ? "auto" : "none";
-    }
+      }
 
-    /* ---------------- RENDER ---------------- */
-    const timeVal = Math.max(0, Math.min(1.25, s.p));
-    const progress01 = Math.max(0, Math.min(1, timeVal));
+      /* ---------------- RENDER ---------------- */
+      const timeVal = Math.max(0, Math.min(1.25, s.p));
+      const progress01 = Math.max(0, Math.min(1, timeVal));
 
-    const W = gl.drawingBufferWidth;
-    const H = gl.drawingBufferHeight;
+      const W = gl.drawingBufferWidth;
+      const H = gl.drawingBufferHeight;
 
-    const prevMask = s.ping === 0 ? s.maskTexA : s.maskTexB;
-    const nextMask = s.ping === 0 ? s.maskTexB : s.maskTexA;
-    const nextFB = s.ping === 0 ? s.fbB : s.fbA;
+      const prevMask = s.ping === 0 ? s.maskTexA : s.maskTexB;
+      const nextMask = s.ping === 0 ? s.maskTexB : s.maskTexA;
+      const nextFB = s.ping === 0 ? s.fbB : s.fbA;
 
-    // Pass 1: Mask
-    gl.bindFramebuffer(gl.FRAMEBUFFER, nextFB);
-    gl.viewport(0, 0, W, H);
-    gl.disable(gl.BLEND);
-    gl.useProgram(s.maskProg);
-    gl.uniform2f(s.u_mask.res, W, H);
-    gl.uniform2f(s.u_mask.imgRes, s.imgW, s.imgH);
-    gl.uniform1f(s.u_mask.time, timeVal);
-    gl.uniform1f(s.u_mask.anim, anim);
-    gl.uniform1f(s.u_mask.seed, s.seed);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, s.logoTex); gl.uniform1i(s.u_mask.logo, 0);
-    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, prevMask); gl.uniform1i(s.u_mask.prevMask, 1);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+      // Pass 1: Mask
+      gl.bindFramebuffer(gl.FRAMEBUFFER, nextFB);
+      gl.viewport(0, 0, W, H);
+      gl.disable(gl.BLEND);
+      gl.useProgram(s.maskProg);
+      gl.uniform2f(s.u_mask.res, W, H);
+      gl.uniform2f(s.u_mask.imgRes, s.imgW, s.imgH);
+      gl.uniform1f(s.u_mask.time, timeVal);
+      gl.uniform1f(s.u_mask.anim, anim);
+      gl.uniform1f(s.u_mask.seed, s.seed);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, s.logoTex);
+      gl.uniform1i(s.u_mask.logo, 0);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, prevMask);
+      gl.uniform1i(s.u_mask.prevMask, 1);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // Pass 2: Scene
-    gl.bindFramebuffer(gl.FRAMEBUFFER, s.sceneFB);
-    gl.viewport(0, 0, W, H);
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.useProgram(s.renderProg);
-    gl.uniform2f(s.u_render.res, W, H);
-    gl.uniform2f(s.u_render.imgRes, s.imgW, s.imgH);
-    gl.uniform1f(s.u_render.anim, anim);
-    gl.uniform1f(s.u_render.seed, s.seed);
-    gl.uniform1f(s.u_render.progress, progress01);
-    gl.uniform3f(s.u_render.brand, brandLin[0], brandLin[1], brandLin[2]);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, s.logoTex); gl.uniform1i(s.u_render.logo, 0);
-    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, nextMask); gl.uniform1i(s.u_render.mask, 1);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+      // Pass 2: Scene
+      gl.bindFramebuffer(gl.FRAMEBUFFER, s.sceneFB);
+      gl.viewport(0, 0, W, H);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(s.renderProg);
+      gl.uniform2f(s.u_render.res, W, H);
+      gl.uniform2f(s.u_render.imgRes, s.imgW, s.imgH);
+      gl.uniform1f(s.u_render.anim, anim);
+      gl.uniform1f(s.u_render.seed, s.seed);
+      gl.uniform1f(s.u_render.progress, progress01);
+      gl.uniform3f(s.u_render.brand, brandLin[0], brandLin[1], brandLin[2]);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, s.logoTex);
+      gl.uniform1i(s.u_render.logo, 0);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, nextMask);
+      gl.uniform1i(s.u_render.mask, 1);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // Pass 3: Post
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, W, H);
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.useProgram(s.postProg);
-    gl.uniform2f(s.u_post.res, W, H);
-    gl.uniform1f(s.u_post.anim, anim);
-    gl.uniform1f(s.u_post.seed, s.seed + timeVal * 10.0);
-    gl.uniform1f(s.u_post.progress, progress01);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, s.sceneTex); gl.uniform1i(s.u_post.scene, 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+      // Pass 3: Post
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, W, H);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(s.postProg);
+      gl.uniform2f(s.u_post.res, W, H);
+      gl.uniform1f(s.u_post.anim, anim);
+      gl.uniform1f(s.u_post.seed, s.seed + timeVal * 10.0);
+      gl.uniform1f(s.u_post.progress, progress01);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, s.sceneTex);
+      gl.uniform1i(s.u_post.scene, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    s.ping = 1 - s.ping;
-    s.raf = requestAnimationFrame(loop);
-  };
+      s.ping = 1 - s.ping;
+      if (loopRef.current) s.raf = requestAnimationFrame(loopRef.current);
+    };
+
+    return () => {
+      loopRef.current = null;
+    };
+  }, [brandColor, brandLin, onScrolledChange]);
 
   const resetMelt = (gl: WebGLRenderingContext) => {
     const s = S.current;
@@ -681,6 +855,7 @@ export default function HeroMeltWebGL({
     if (!gl) return;
     const s = S.current;
     s.gl = gl;
+    if (!s.seed) s.seed = Math.random() * 1000;
     s.t0 = performance.now();
 
     const maskProg = createProgram(gl, shaders.VERT, shaders.MASK_FRAG);
@@ -768,7 +943,7 @@ export default function HeroMeltWebGL({
         }
         s.loaded = true;
         cancelAnimationFrame(s.raf);
-        s.raf = requestAnimationFrame(loop);
+        if (loopRef.current) s.raf = requestAnimationFrame(loopRef.current);
     };
 
     const resize = () => {
