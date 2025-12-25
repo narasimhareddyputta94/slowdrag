@@ -9,11 +9,6 @@ type DesignItem = {
 
 type Size = { width: number; height: number };
 
-type Row = {
-  height: number;
-  items: Array<{ src: string; title: string; width: number }>;
-};
-
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -51,10 +46,16 @@ export default function DesignsShowcase() {
     []
   );
 
+  const startIndex = useMemo(() => {
+    const idx = designs.findIndex((d) => d.title === "image9");
+    return idx >= 0 ? idx : 0;
+  }, [designs]);
+
   // Keep the existing arrows: rotate the gallery order.
   const [offset, setOffset] = useState(0);
-  const next = () => setOffset((i) => (i + 1) % designs.length);
-  const prev = () => setOffset((i) => (i - 1 + designs.length) % designs.length);
+  useEffect(() => {
+    setOffset(startIndex);
+  }, [startIndex]);
 
   const orderedDesigns = useMemo(() => {
     if (designs.length === 0) return designs;
@@ -62,9 +63,26 @@ export default function DesignsShowcase() {
     return [...designs.slice(normalized), ...designs.slice(0, normalized)];
   }, [designs, offset]);
 
+  const normalizedOffset = useMemo(() => {
+    if (designs.length === 0) return 0;
+    return ((offset % designs.length) + designs.length) % designs.length;
+  }, [designs.length, offset]);
+
+  const showSingle = normalizedOffset === startIndex;
+  const firstDesign = orderedDesigns[0];
+  const secondDesign = !showSingle ? orderedDesigns[1] : undefined;
+
+  const next = () => {
+    const step = showSingle ? 1 : 2;
+    setOffset((i) => (i + step) % designs.length);
+  };
+  const prev = () => {
+    const step = showSingle ? 2 : 2;
+    setOffset((i) => (i - step + designs.length) % designs.length);
+  };
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState<Size>({ width: 0, height: 0 });
-  const [aspectBySrc, setAspectBySrc] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const el = containerRef.current;
@@ -82,109 +100,8 @@ export default function DesignsShowcase() {
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      const entries = await Promise.all(
-        orderedDesigns.map(
-          (d) =>
-            new Promise<[string, number]>((resolve) => {
-              const img = new Image();
-              img.decoding = "async";
-              img.onload = () => {
-                const w = img.naturalWidth || 1;
-                const h = img.naturalHeight || 1;
-                resolve([d.src, w / h]);
-              };
-              img.onerror = () => resolve([d.src, 1]);
-              img.src = d.src;
-            })
-        )
-      );
-
-      if (cancelled) return;
-      setAspectBySrc((prev) => {
-        const nextMap = { ...prev };
-        for (const [src, ratio] of entries) nextMap[src] = ratio;
-        return nextMap;
-      });
-    };
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [orderedDesigns]);
-
-  const rows: Row[] = useMemo(() => {
-    const width = containerSize.width;
-    const height = containerSize.height;
-    if (!width || !height || orderedDesigns.length === 0) return [];
-
-    const gap = clamp(Math.round(width / 90), 8, 14);
-    const padding = clamp(Math.round(width / 45), 10, 26);
-    const innerWidth = Math.max(0, width - padding * 2);
-    const innerHeight = Math.max(0, height - padding * 2);
-
-    const targetRowHeight = clamp(innerHeight / 3.2, 86, 160);
-    const minRowHeight = clamp(innerHeight / 5.0, 70, 120);
-    const maxRowHeight = clamp(innerHeight / 2.6, 110, 220);
-
-    const result: Row[] = [];
-    let rowItems: Array<{ src: string; title: string; ratio: number }> = [];
-    let ratioSum = 0;
-    let usedHeight = 0;
-
-    const flushRow = (isLastRow: boolean) => {
-      if (rowItems.length === 0) return;
-      const gaps = gap * Math.max(0, rowItems.length - 1);
-      const available = Math.max(1, innerWidth - gaps);
-
-      // Fit row to width; last row can be closer to target height.
-      const fittedHeight = available / Math.max(0.001, ratioSum);
-      const finalHeight = isLastRow
-        ? clamp(fittedHeight, minRowHeight, targetRowHeight)
-        : clamp(fittedHeight, minRowHeight, maxRowHeight);
-
-      const nextUsed = usedHeight + finalHeight + (result.length ? gap : 0);
-      if (nextUsed > innerHeight) {
-        // No space for this row; stop without clipping.
-        rowItems = [];
-        ratioSum = 0;
-        return;
-      }
-
-      const items = rowItems.map((it) => ({
-        src: it.src,
-        title: it.title,
-        width: Math.max(1, finalHeight * it.ratio),
-      }));
-
-      result.push({ height: finalHeight, items });
-      usedHeight = nextUsed;
-      rowItems = [];
-      ratioSum = 0;
-    };
-
-    for (let i = 0; i < orderedDesigns.length; i++) {
-      const d = orderedDesigns[i];
-      const ratio = aspectBySrc[d.src] ?? 1;
-      rowItems.push({ src: d.src, title: d.title, ratio });
-      ratioSum += ratio;
-
-      const gaps = gap * Math.max(0, rowItems.length - 1);
-      const rowWidthAtTarget = ratioSum * targetRowHeight + gaps;
-      if (rowWidthAtTarget >= innerWidth) {
-        flushRow(false);
-        if (usedHeight >= innerHeight - minRowHeight) break;
-      }
-    }
-
-    flushRow(true);
-    return result;
-  }, [aspectBySrc, containerSize.height, containerSize.width, orderedDesigns]);
+  const padding = clamp(Math.round(containerSize.width / 45), 10, 26);
+  const gap = clamp(Math.round(containerSize.width / 90), 8, 14);
 
   const shapePath = `
     M 25,0
@@ -307,37 +224,60 @@ export default function DesignsShowcase() {
                       width: "100%",
                       height: "100%",
                       display: "flex",
-                      flexDirection: "column",
                       justifyContent: "center",
-                      padding: clamp(Math.round(containerSize.width / 45), 10, 26),
-                      gap: clamp(Math.round(containerSize.width / 90), 8, 14),
+                      padding,
                     }}
                   >
-                    {rows.map((row, rowIndex) => (
+                    {firstDesign ? (
                       <div
-                        key={`row-${rowIndex}`}
                         style={{
+                          width: "100%",
+                          height: "100%",
                           display: "flex",
-                          alignItems: "center",
-                          height: row.height,
-                          gap: clamp(Math.round(containerSize.width / 90), 8, 14),
+                          gap,
                         }}
                       >
-                        {row.items.map((it) => (
-                          <div
-                            key={it.src}
+                        <div
+                          style={{
+                            width: showSingle ? "100%" : "50%",
+                            height: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: "rgba(0,0,0,0.35)",
+                            borderRadius: 12,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <img
+                            src={firstDesign.src}
+                            alt={firstDesign.title}
                             style={{
-                              width: it.width,
-                              height: row.height,
-                              flex: "0 0 auto",
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "contain",
+                              objectPosition: "center",
+                              display: "block",
+                            }}
+                          />
+                        </div>
+
+                        {!showSingle && secondDesign ? (
+                          <div
+                            style={{
+                              width: "50%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
                               background: "rgba(0,0,0,0.35)",
-                              borderRadius: 10,
+                              borderRadius: 12,
                               overflow: "hidden",
                             }}
                           >
                             <img
-                              src={it.src}
-                              alt={it.title}
+                              src={secondDesign.src}
+                              alt={secondDesign.title}
                               style={{
                                 width: "100%",
                                 height: "100%",
@@ -347,9 +287,9 @@ export default function DesignsShowcase() {
                               }}
                             />
                           </div>
-                        ))}
+                        ) : null}
                       </div>
-                    ))}
+                    ) : null}
 
                     <div
                       style={{

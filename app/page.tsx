@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Navbar from "@/components/nav/Navbar";
 import FilmsShowcase from "@/components/sections/FilmsShowcase";
+import MobileFilmsShowcase from "@/components/sections/MobileFilmsShowcase";
 import Manifesto2 from "@/components/sections/Manifesto2";
 import DesignsShowcase from "@/components/sections/DesignsShowcase";
 import RotatedVideoSection from "@/components/sections/RotatedVideoSection";
@@ -13,8 +14,18 @@ import ManifestoMeltWebGLPage from "./manifestomeltwebgl/page";
 export default function Home() {
   const [showNav, setShowNav] = useState(false);
   const [heroInView, setHeroInView] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const heroWrapRef = useRef<HTMLDivElement | null>(null);
   const brandColor = "#c6376c";
+
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkIsMobile();
+    window.addEventListener("resize", checkIsMobile);
+    return () => window.removeEventListener("resize", checkIsMobile);
+  }, []);
 
   useEffect(() => {
     const el = heroWrapRef.current;
@@ -49,7 +60,7 @@ export default function Home() {
       </div>
 
 <ManifestoMeltWebGLPage />
-      <FilmsShowcase />
+      {isMobile ? <MobileFilmsShowcase /> : <FilmsShowcase />}
       <Manifesto2 />
       <DesignsShowcase />
       <RotatedVideoSection />

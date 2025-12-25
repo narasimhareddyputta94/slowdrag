@@ -61,7 +61,7 @@ function Instagram() {
 function XIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: '36px', height: '36px', display: 'block' }}>
-      <path d="M6 18L18 6" stroke={ICON} strokeWidth="2" strokeLinecap="round" />
+      <path d="M6 18L18 6" stroke={ICON} strokeWidth="2" strokeLinecap="round"/>
       <path
         d="M8 6h5l5 6.8V18h-5L8 11.2V6Z"
         fill="none"

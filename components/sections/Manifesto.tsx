@@ -244,7 +244,7 @@ export default function Manifesto() {
   const hasRevealedOnceRef = useRef<boolean>(false);
   const hasStartedOnceRef = useRef<boolean>(false);
 
-  const brand = "#ff3d3dff";
+  const brand = "#6e1616ff";
   const brandRgb = useMemo(() => hexToRgb01(brand), [brand]);
 
   useEffect(() => {

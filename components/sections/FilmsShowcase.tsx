@@ -73,25 +73,14 @@ export default function FilmsShowcase() {
   const films: FilmItem[] = useMemo(
     () => {
       const videoFiles = [
-        "1.mp4",
-        "Coming Home.mov",
-        "Different Versions - More Blocks.mp4",
-        "Different Versions - Yellow 2 - HQ.mp4",
-        "Fragments 2.mp4",
-        "Memory Playback.mp4",
-        "Overflow - Compressed.mp4",
-        "Shatakshi Polaroidder.mp4",
-        "Versions.mp4",
-        "video1.mp4",
-        "video2.mp4",
-        "video3.mp4",
-        "video4.mp4",
-        "video5.mp4",
+        "Slowdrag 1_subs.mov",
+        "Slowdrag 2_subs.mov",
+        "Slowdrag 3_subs.mov",
       ].sort((a, b) => a.localeCompare(b));
 
       return videoFiles.map((name) => ({
         title: name.replace(/\.[^./]+$/, ""),
-        src: `/videos/${encodeURIComponent(name)}`,
+        src: `/website_videos/${encodeURIComponent(name)}`,
       }));
     },
     []
@@ -254,7 +243,7 @@ export default function FilmsShowcase() {
 
       <div className="relative w-[95%] md:w-[90%] lg:w-[80%] xl:w-[70%] max-w-[1200px] flex items-center justify-center z-10">
         <div
-          className="relative w-full aspect-[16/10] md:aspect-[1.8/1]"
+          className="relative w-full aspect-[5/3]"
           onPointerDown={handlePlayerPointerDown}
         >
           <svg
@@ -325,9 +314,11 @@ export default function FilmsShowcase() {
                     style={{
                       width: "100%",
                       height: "100%",
-                      objectFit: "contain",
+                      objectFit: "cover",
                       objectPosition: "center",
                       display: "block",
+                      transform: "scale(1.34)",
+                      transformOrigin: "center",
                       opacity: videoOpacity,
                       transition: "opacity 280ms ease",
                     }}
