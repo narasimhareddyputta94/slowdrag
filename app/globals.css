@@ -51,6 +51,66 @@ body {
   color: #fff;
 }
 
+/* ---------------- Contact page: mobile-only adjustments ---------------- */
+@media (max-width: 767.98px) {
+  /* Keep the same shape/design, but reduce overall card height */
+  .contact-card {
+    /* shorter than desktop clamp(520px, 62vh, 680px) */
+    min-height: clamp(440px, 62vh, 560px) !important;
+  }
+
+  /* Quote inside the card: keep it visible and proportional */
+  .contact-card-quote {
+    top: 24px !important;
+    right: 18px !important;
+    max-width: 240px !important;
+    font-size: clamp(18px, 5.2vw, 24px) !important;
+    line-height: 1.05 !important;
+  }
+
+  /* Form spacing: tighter on mobile */
+  .contact-form {
+    margin-top: clamp(150px, 20vh, 210px) !important;
+    gap: 14px !important;
+  }
+
+  /* Inputs: slightly smaller so everything fits nicely */
+  .contact-page .contact-field {
+    max-width: 100% !important;
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+    border-width: 2px !important;
+  }
+
+  .contact-page textarea.contact-field {
+    height: 132px !important;
+    border-radius: 18px !important;
+    padding-top: 12px !important;
+  }
+
+  .contact-actions {
+    margin-top: 4px !important;
+  }
+
+  .contact-submit {
+    font-size: 13px !important;
+    padding: 10px 16px !important;
+  }
+
+  /* Keep the “outside quote” but make it flow under the card on mobile */
+  .contact-outside-quote {
+    position: static !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin-top: 14px !important;
+    width: auto !important;
+    max-width: 100% !important;
+    white-space: pre-line !important;
+    font-size: 16px !important;
+    line-height: 1.25 !important;
+  }
+}
+
 /* ---------------- Manifesto: optional melt shading on letters ---------------- */
 /* Only enable if you intentionally set data-meltfill="1" */
 section[aria-label="Manifesto"][data-meltfill="1"] .manifesto-copy,

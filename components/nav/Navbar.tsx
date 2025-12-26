@@ -87,26 +87,27 @@ export default function Navbar({
         }}
       >
         {/* Logo */}
-        <div style={{ position: "fixed", left: 36, top: 28, pointerEvents: show ? "auto" : "none" }}>
+        <div
+          className="fixed left-[max(0px,env(safe-area-inset-left))] top-[max(10px,env(safe-area-inset-top))] md:left-9 md:top-7"
+          style={{ pointerEvents: show ? "auto" : "none" }}
+        >
           <button
             type="button"
             onClick={() => go("/")}
             aria-label="Home"
+            className="relative h-[64px] w-[140px] md:h-[96px] md:w-[180px]"
             style={{
               background: "transparent",
               border: 0,
               padding: 0,
               cursor: "pointer",
-              width: 180,
-              height: 96,
-              position: "relative",
             }}
           >
             <Image
               src={logoSrc}
               alt="Logo"
               fill
-              sizes="180px"
+              sizes="(max-width: 768px) 140px, 180px"
               priority
               style={{
                 objectFit: "contain",
@@ -122,7 +123,7 @@ export default function Navbar({
                 src={logoAltSrc}
                 alt="Logo"
                 fill
-                sizes="180px"
+                sizes="(max-width: 768px) 140px, 180px"
                 priority
                 style={{
                   objectFit: "contain",
@@ -142,10 +143,8 @@ export default function Navbar({
           type="button"
           aria-label="Open menu"
           onClick={() => setMenuOpen(true)}
+          className="fixed right-[max(8px,env(safe-area-inset-right))] top-[max(10px,env(safe-area-inset-top))] md:right-11 md:top-10"
           style={{
-            position: "fixed",
-            right: 44,
-            top: 40,
             width: 44,
             height: 44,
             border: 0,

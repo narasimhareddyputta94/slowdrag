@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type HeroProps = {
@@ -104,6 +104,7 @@ uniform sampler2D u_logo;
 uniform sampler2D u_prevMask;
 uniform vec2 u_res;
 uniform vec2 u_imgRes;
+uniform float u_cover;
 uniform float u_time;
 uniform float u_anim;
 uniform float u_seed;
@@ -140,16 +141,29 @@ vec2 flowField(vec2 p){
   float l = max(0.001, length(f));
   return f / l;
 }
-vec2 aspectFitUV(vec2 uv, vec2 canvasPx, vec2 imgPx){
+vec2 aspectFitUV(vec2 uv, vec2 canvasPx, vec2 imgPx, float fit){
   float ca = canvasPx.x / canvasPx.y;
   float ia = imgPx.x / imgPx.y;
-  vec2 scale = vec2(1.0);
-  if (ia > ca) scale.y = ca / ia;
-  else scale.x = ia / ca;
+
+  // contain: show full image, letterbox/pillarbox canvas
+  // cover: fill canvas, crop image
+  vec2 containScale = vec2(1.0);
+  vec2 coverScale = vec2(1.0);
+
+  if (ia > ca) {
+    containScale.y = ia / ca; // > 1 : expands UV range in Y -> letterbox
+    coverScale.x = ca / ia;   // < 1 : compress UV range in X -> crop sides
+  } else {
+    containScale.x = ca / ia; // > 1 : expands UV range in X -> pillarbox
+    coverScale.y = ia / ca;   // < 1 : compress UV range in Y -> crop top/bottom
+  }
+
+  float t = clamp(fit, 0.0, 1.0);
+  vec2 scale = mix(containScale, coverScale, t);
   return (uv - 0.5) * scale + 0.5;
 }
 void main() {
-  vec2 uv = aspectFitUV(v_uv, u_res, u_imgRes);
+  vec2 uv = aspectFitUV(v_uv, u_res, u_imgRes, u_cover);
   float prev0 = texture2D(u_prevMask, v_uv).r;
   float anim = u_anim;
   float p = clamp(u_time, 0.0, 1.25);
@@ -208,6 +222,7 @@ uniform sampler2D u_logo;
 uniform sampler2D u_mask;
 uniform vec2 u_res;
 uniform vec2 u_imgRes;
+uniform float u_cover;
 uniform float u_anim;
 uniform float u_seed;
 uniform float u_progress;
@@ -233,17 +248,28 @@ float fbm(vec2 p){
     }
     return v;
 }
-vec2 aspectFitUV(vec2 uv, vec2 canvasPx, vec2 imgPx){
+vec2 aspectFitUV(vec2 uv, vec2 canvasPx, vec2 imgPx, float fit){
   float ca = canvasPx.x / canvasPx.y;
   float ia = imgPx.x / imgPx.y;
-  vec2 scale = vec2(1.0);
-  if (ia > ca) scale.y = ca / ia;
-  else scale.x = ia / ca;
+
+  vec2 containScale = vec2(1.0);
+  vec2 coverScale = vec2(1.0);
+
+  if (ia > ca) {
+    containScale.y = ia / ca;
+    coverScale.x = ca / ia;
+  } else {
+    containScale.x = ca / ia;
+    coverScale.y = ia / ca;
+  }
+
+  float t = clamp(fit, 0.0, 1.0);
+  vec2 scale = mix(containScale, coverScale, t);
   return (uv - 0.5) * scale + 0.5;
 }
 void main() {
   float m = texture2D(u_mask, v_uv).r;
-  vec2 uv = aspectFitUV(v_uv, u_res, u_imgRes);
+  vec2 uv = aspectFitUV(v_uv, u_res, u_imgRes, u_cover);
   vec2 uvC = clamp(uv, 0.0, 1.0);
   bool inBounds = !(uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0);
   vec4 base = inBounds ? texture2D(u_logo, uvC) : vec4(0.0);
@@ -466,6 +492,7 @@ export default function HeroMeltWebGL({
     lockDone: false, // once true, never lock again
     lockActive: false,
     lockScrollY: 0,
+    cover: 0,
   });
 
   // Create the RAF loop after mount to keep the component render pure.
@@ -670,6 +697,7 @@ export default function HeroMeltWebGL({
       gl.useProgram(s.maskProg);
       gl.uniform2f(s.u_mask.res, W, H);
       gl.uniform2f(s.u_mask.imgRes, s.imgW, s.imgH);
+      if (s.u_mask.cover) gl.uniform1f(s.u_mask.cover, s.cover);
       gl.uniform1f(s.u_mask.time, timeVal);
       gl.uniform1f(s.u_mask.anim, anim);
       gl.uniform1f(s.u_mask.seed, s.seed);
@@ -689,6 +717,7 @@ export default function HeroMeltWebGL({
       gl.useProgram(s.renderProg);
       gl.uniform2f(s.u_render.res, W, H);
       gl.uniform2f(s.u_render.imgRes, s.imgW, s.imgH);
+      if (s.u_render.cover) gl.uniform1f(s.u_render.cover, s.cover);
       gl.uniform1f(s.u_render.anim, anim);
       gl.uniform1f(s.u_render.seed, s.seed);
       gl.uniform1f(s.u_render.progress, progress01);
@@ -884,6 +913,7 @@ export default function HeroMeltWebGL({
         prevMask: gl.getUniformLocation(maskProg, "u_prevMask"),
         res: gl.getUniformLocation(maskProg, "u_res"),
         imgRes: gl.getUniformLocation(maskProg, "u_imgRes"),
+      cover: gl.getUniformLocation(maskProg, "u_cover"),
         time: gl.getUniformLocation(maskProg, "u_time"),
         anim: gl.getUniformLocation(maskProg, "u_anim"),
         seed: gl.getUniformLocation(maskProg, "u_seed"),
@@ -893,6 +923,7 @@ export default function HeroMeltWebGL({
         mask: gl.getUniformLocation(renderProg, "u_mask"),
         res: gl.getUniformLocation(renderProg, "u_res"),
         imgRes: gl.getUniformLocation(renderProg, "u_imgRes"),
+      cover: gl.getUniformLocation(renderProg, "u_cover"),
         anim: gl.getUniformLocation(renderProg, "u_anim"),
         seed: gl.getUniformLocation(renderProg, "u_seed"),
         progress: gl.getUniformLocation(renderProg, "u_progress"),
@@ -949,7 +980,19 @@ export default function HeroMeltWebGL({
     const resize = () => {
         if (!canvas.parentElement) return;
         const rect = canvas.parentElement.getBoundingClientRect();
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const isSmallScreen = window.matchMedia?.("(max-width: 768px)")?.matches ?? false;
+      const isPortrait = rect.height >= rect.width;
+      // Blend toward cover on tall portrait screens, but cap it so the logo
+      // remains readable and doesn't get overly cropped.
+      if (isSmallScreen && isPortrait) {
+        const ar = rect.height / Math.max(1, rect.width);
+        const t = Math.max(0, Math.min(1, (ar - 1.15) / 0.95));
+        s.cover = t * 0.45;
+      } else {
+        s.cover = 0;
+      }
+      const dprCap = isSmallScreen ? 1.5 : 2;
+      const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
         // On mobile, scroll bars might trigger resize events, ignore small ones
         if (Math.abs(rect.width - s.lastLayoutW) < 1 && Math.abs(rect.height - s.lastLayoutH) < 1) return;
         
@@ -993,11 +1036,38 @@ export default function HeroMeltWebGL({
     };
   }, [imageSrc, shaders, brandLin]);
 
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia?.("(max-width: 768px)");
+    if (!mql) return;
+
+    const onChange = () => setIsSmallScreen(mql.matches);
+    onChange();
+
+    if (typeof mql.addEventListener === "function") {
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    }
+
+    // Legacy Safari
+    // @ts-ignore - older MediaQueryList API
+    mql.addListener(onChange);
+    // @ts-ignore - older MediaQueryList API
+    return () => mql.removeListener(onChange);
+  }, []);
+
+  const edgePad = "clamp(12px, 3.2vw, 36px)";
+  const bottomPad = `calc(${edgePad} + env(safe-area-inset-bottom, 0px))`;
+  const leftPad = `calc(${edgePad} + env(safe-area-inset-left, 0px))`;
+  const rightPad = `calc(${edgePad} + env(safe-area-inset-right, 0px))`;
+
   return (
     <section
       ref={containerRef}
       style={{
-        height: "100vh", // keep layout 100vh; scroll-lock simulates extra travel
+        height: "100svh",
+        minHeight: "100vh", // fallback for browsers without svh
         width: "100%",
         background: "#000",
         position: "relative",
@@ -1008,7 +1078,8 @@ export default function HeroMeltWebGL({
           position: "sticky", // Pin the content while scrolling
           top: 0,
           width: "100%",
-          height: "100vh",
+          height: "100svh",
+          minHeight: "100vh",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -1020,8 +1091,8 @@ export default function HeroMeltWebGL({
           aria-hidden={!showCaption}
           style={{
             position: "absolute",
-            left: 36,
-            bottom: 28,
+            left: leftPad,
+            bottom: bottomPad,
             zIndex: 10,
             pointerEvents: "none",
             opacity: showCaption ? 1 : 0,
@@ -1032,6 +1103,7 @@ export default function HeroMeltWebGL({
             letterSpacing: "0.14em",
             lineHeight: 1.15,
             fontSize: "clamp(22px, 2.2vw, 34px)",
+            maxWidth: "min(44vw, 520px)",
             whiteSpace: "pre-line",
           }}
         >
@@ -1042,8 +1114,8 @@ export default function HeroMeltWebGL({
           aria-hidden={!showCaption}
           style={{
             position: "absolute",
-            right: 36,
-            top: "50%",
+            right: rightPad,
+            top: isSmallScreen ? "75%" : "50%",
             transform: "translate3d(0,-50%,0)",
             zIndex: 10,
             pointerEvents: "none",
@@ -1055,6 +1127,7 @@ export default function HeroMeltWebGL({
             letterSpacing: "0.14em",
             lineHeight: 1.15,
             fontSize: "clamp(18px, 1.8vw, 28px)",
+            maxWidth: "min(42vw, 520px)",
             whiteSpace: "pre-line",
             textAlign: "right",
           }}
@@ -1068,8 +1141,8 @@ export default function HeroMeltWebGL({
           onClick={() => router.push("/contact")}
           style={{
             position: "absolute",
-            right: 36,
-            bottom: 28,
+            right: rightPad,
+            bottom: bottomPad,
             zIndex: 10,
             opacity: showCaption ? 1 : 0,
             transition: "opacity 450ms ease",
@@ -1077,7 +1150,7 @@ export default function HeroMeltWebGL({
             background: "transparent",
             border: `2px solid ${brandColor}`,
             borderRadius: 999,
-            padding: "10px 18px",
+            padding: "clamp(9px, 1.2vw, 12px) clamp(14px, 1.6vw, 20px)",
             color: "#fff",
             fontFamily: "var(--font-offbit), monospace",
             textTransform: "uppercase",
