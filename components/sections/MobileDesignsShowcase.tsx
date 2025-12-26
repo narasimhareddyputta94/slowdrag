@@ -11,6 +11,7 @@ type DesignItem = {
 export default function MobileDesignsShowcase() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [isHeld, setIsHeld] = useState(false);
 
   const designs: DesignItem[] = useMemo(
     () =>
@@ -19,7 +20,7 @@ export default function MobileDesignsShowcase() {
         //   public/mobile_images/branding/
         // Then update the file names here.
         { title: "image1.jpg", src: "/mobile_images/branding/image1.jpg" },
-        { title: "image2.jpg", src: "/mobile_images/branding/image2.jpg" },
+        { title: "image2.gif", src: "/mobile_images/branding/image2.gif" },
         { title: "image3.jpg", src: "/mobile_images/branding/image3.jpg" },
         { title: "image4.jpg", src: "/mobile_images/branding/image4.jpg" },
         { title: "image5.jpg", src: "/mobile_images/branding/image5.jpg" },
@@ -61,11 +62,12 @@ export default function MobileDesignsShowcase() {
   // Fast, continuous autoplay (mobile-only section; desktop remains unchanged elsewhere)
   useEffect(() => {
     if (!hasDesigns) return;
+    if (isHeld) return;
     const id = window.setInterval(() => {
       setActiveIndex((prev) => (prev + 1) % designs.length);
     }, 1400);
     return () => window.clearInterval(id);
-  }, [hasDesigns, designs.length]);
+  }, [hasDesigns, designs.length, isHeld]);
 
   const currentDesign = hasDesigns ? designs[activeIndex] : undefined;
 
@@ -92,16 +94,43 @@ export default function MobileDesignsShowcase() {
 
       <main
         className="relative h-[76vh] w-full overflow-hidden"
-        onTouchStart={(e) => setTouchStart(e.targetTouches[0].clientX)}
+        onTouchStart={(e) => {
+          setIsHeld(true);
+          setTouchStart(e.targetTouches[0].clientX);
+        }}
         onTouchEnd={(e) => {
-          if (!touchStart) return;
-          const dist = touchStart - e.changedTouches[0].clientX;
-          if (dist > 50) handleNext();
-          else if (dist < -50) handlePrev();
+          setIsHeld(false);
+          if (touchStart !== null) {
+            const dist = touchStart - e.changedTouches[0].clientX;
+            if (dist > 50) handleNext();
+            else if (dist < -50) handlePrev();
+          }
           setTouchStart(null);
         }}
+        onTouchCancel={() => {
+          setIsHeld(false);
+          setTouchStart(null);
+        }}
+        onContextMenu={(e) => e.preventDefault()}
       >
         <div className="absolute inset-0 bg-black" />
+        <motion.div
+          aria-hidden="true"
+          className="absolute -inset-12 pointer-events-none opacity-[0.22] blur-2xl"
+          animate={{
+            x: [0, 10, -8, 0],
+            y: [0, -12, 10, 0],
+          }}
+          transition={{
+            duration: 3.2,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          style={{
+            background:
+              "radial-gradient(circle at 30% 35%, rgba(45,212,191,0.18), transparent 45%), radial-gradient(circle at 70% 60%, rgba(255,255,255,0.10), transparent 52%)",
+          }}
+        />
         <div className="absolute inset-0 pointer-events-none opacity-[0.10] mix-blend-overlay bg-[url('https://upload.wikimedia.org/wikipedia/commons/7/76/1k_Grain.jpg')]" />
 
         <AnimatePresence mode="wait">
@@ -148,23 +177,10 @@ export default function MobileDesignsShowcase() {
         </AnimatePresence>
       </main>
 
-      <footer className="h-[12vh] w-full px-8 flex items-center justify-between z-50 bg-[#020202]">
-        <div className="flex gap-2 items-center">
-          {designs.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              aria-label={`Go to design ${i + 1}`}
-              onClick={() => setActiveIndex(i)}
-              className="h-0.5 bg-white/10 w-8 rounded-full overflow-hidden"
-            >
-              {i === activeIndex && <div className="h-full bg-teal-500 w-full" />}
-              {i < activeIndex && <div className="h-full bg-white/40 w-full" />}
-            </button>
-          ))}
+      <footer className="h-[12vh] w-full px-8 flex items-center justify-end z-50 bg-[#020202]">
+        <div className="text-[10px] font-bold tracking-[0.2em] text-white/40 uppercase">
+          Hold to pause
         </div>
-
-        <div className="text-[10px] font-bold tracking-[0.2em] text-white/40 uppercase">Swipe</div>
       </footer>
     </section>
   );

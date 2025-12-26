@@ -45,17 +45,13 @@ export default function DesignsShowcase() {
     return ((offset % designs.length) + designs.length) % designs.length;
   }, [designs.length, offset]);
 
-  const showSingle = normalizedOffset === startIndex;
   const firstDesign = orderedDesigns[0];
-  const secondDesign = !showSingle ? orderedDesigns[1] : undefined;
 
   const next = () => {
-    const step = showSingle ? 1 : 2;
-    setOffset((i) => (i + step) % designs.length);
+    setOffset((i) => (i + 1) % designs.length);
   };
   const prev = () => {
-    const step = showSingle ? 2 : 2;
-    setOffset((i) => (i - step + designs.length) % designs.length);
+    setOffset((i) => (i - 1 + designs.length) % designs.length);
   };
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -77,8 +73,7 @@ export default function DesignsShowcase() {
     return () => ro.disconnect();
   }, []);
 
-  const padding = clamp(Math.round(containerSize.width / 45), 10, 26);
-  const gap = clamp(Math.round(containerSize.width / 90), 8, 14);
+  const padding = 0;
 
   const shapePath = `
     M 25,0
@@ -211,18 +206,15 @@ export default function DesignsShowcase() {
                           width: "100%",
                           height: "100%",
                           display: "flex",
-                          gap,
                         }}
                       >
                         <div
                           style={{
-                            width: showSingle ? "100%" : "50%",
+                            width: "100%",
                             height: "100%",
                             display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            background: "rgba(0,0,0,0.35)",
-                            borderRadius: 12,
+                            alignItems: "stretch",
+                            justifyContent: "stretch",
                             overflow: "hidden",
                           }}
                         >
@@ -232,39 +224,12 @@ export default function DesignsShowcase() {
                             style={{
                               width: "100%",
                               height: "100%",
-                              objectFit: "contain",
+                              objectFit: "cover",
                               objectPosition: "center",
                               display: "block",
                             }}
                           />
                         </div>
-
-                        {!showSingle && secondDesign ? (
-                          <div
-                            style={{
-                              width: "50%",
-                              height: "100%",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              background: "rgba(0,0,0,0.35)",
-                              borderRadius: 12,
-                              overflow: "hidden",
-                            }}
-                          >
-                            <img
-                              src={secondDesign.src}
-                              alt={secondDesign.title}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "contain",
-                                objectPosition: "center",
-                                display: "block",
-                              }}
-                            />
-                          </div>
-                        ) : null}
                       </div>
                     ) : null}
 
