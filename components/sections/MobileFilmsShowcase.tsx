@@ -19,13 +19,59 @@ export default function WorldClassShowcase() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const films: FilmItem[] = useMemo(() => [
-    { title: "Coming Home", src: "/mobile_videos/Coming%20Home.mov", category: "NARRATIVE" },
-    { title: "Memory Playback", src: "/mobile_videos/Memory%20Playback.mp4", category: "EXPERIMENTAL" },
-    { title: "Overflow", src: "/mobile_videos/Overflow%20-%20Compressed.mp4", category: "COMMERCIAL" },
-    { title: "Shatakshi Polaroidder", src: "/mobile_videos/Shatakshi%20Polaroidder.mp4", category: "DOCUMENTARY" },
-    
-  ].sort((a, b) => a.title.localeCompare(b.title)), []);
+  const films: FilmItem[] = useMemo(
+    () =>
+      [
+        { title: "1", src: "/mobile_videos/1.mp4", category: "FILM" },
+        { title: "Coming Home", src: "/mobile_videos/Coming%20Home.mov", category: "FILM" },
+        {
+          title: "Different Versions - More Blocks",
+          src: "/mobile_videos/Different%20Versions%20-%20More%20Blocks.mp4",
+          category: "FILM",
+        },
+        {
+          title: "Different Versions - Yellow 2 - HQ",
+          src: "/mobile_videos/Different%20Versions%20-%20Yellow%202%20-%20HQ.mp4",
+          category: "FILM",
+        },
+        { title: "Fragments 2", src: "/mobile_videos/Fragments%202.mp4", category: "FILM" },
+        { title: "IMG_2293", src: "/mobile_videos/IMG_2293.MP4", category: "FILM" },
+        { title: "Memory Playback", src: "/mobile_videos/Memory%20Playback.mp4", category: "FILM" },
+        {
+          title: "Overflow - Compressed",
+          src: "/mobile_videos/Overflow%20-%20Compressed.mp4",
+          category: "FILM",
+        },
+        {
+          title: "Shatakshi Polaroidder",
+          src: "/mobile_videos/Shatakshi%20Polaroidder.mp4",
+          category: "FILM",
+        },
+        { title: "Showreel", src: "/mobile_videos/Showreel.mp4", category: "FILM" },
+        {
+          title: "Slowdrag 1_subs",
+          src: "/mobile_videos/Slowdrag%201_subs.mov",
+          category: "FILM",
+        },
+        {
+          title: "Slowdrag 2_subs",
+          src: "/mobile_videos/Slowdrag%202_subs.mov",
+          category: "FILM",
+        },
+        {
+          title: "Slowdrag 3_subs",
+          src: "/mobile_videos/Slowdrag%203_subs.mov",
+          category: "FILM",
+        },
+        { title: "Versions", src: "/mobile_videos/Versions.mp4", category: "FILM" },
+        { title: "video1", src: "/mobile_videos/video1.mp4", category: "FILM" },
+        { title: "video2", src: "/mobile_videos/video2.mp4", category: "FILM" },
+        { title: "video3", src: "/mobile_videos/video3.mp4", category: "FILM" },
+        { title: "video4", src: "/mobile_videos/video4.mp4", category: "FILM" },
+        { title: "video5", src: "/mobile_videos/video5.mp4", category: "FILM" },
+      ].sort((a, b) => a.title.localeCompare(b.title)),
+    []
+  );
 
   const handleNext = () => setActiveIndex((prev) => (prev + 1) % films.length);
   const handlePrev = () => setActiveIndex((prev) => (prev - 1 + films.length) % films.length);

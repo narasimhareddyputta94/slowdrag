@@ -471,7 +471,10 @@ export default function FilmsShowcase() {
           >
             <div
               className="text-[24px] leading-[1.05] font-normal tracking-[0.02em] text-white"
-              style={{ textShadow: "0 2px 4px rgba(180, 0, 0, 0.9)" }}
+              style={{
+                fontFamily: "var(--font-offbit-101)",
+                textShadow: "0 2px 4px rgba(180, 0, 0, 0.9)",
+              }}
             >
               <div>We work across</div>
               <div>narrative</div>

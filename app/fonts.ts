@@ -12,6 +12,12 @@ export const offBitBold = localFont({
   display: "swap",
 });
 
+export const offBit101 = localFont({
+  src: "../public/fonts/OffBit-101.ttf",
+  variable: "--font-offbit-101",
+  display: "swap",
+});
+
 export const offbit = localFont({
   src: "../public/fonts/OffBit-Regular.ttf",
   variable: "--font-offbit",
