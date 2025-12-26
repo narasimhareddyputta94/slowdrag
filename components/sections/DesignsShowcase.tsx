@@ -16,32 +16,9 @@ function clamp(value: number, min: number, max: number) {
 export default function DesignsShowcase() {
   const designs: DesignItem[] = useMemo(
     () => [
-      { title: "image1", src: "/images/branding/image1.jpg" },
-      { title: "image2", src: "/images/branding/image2.gif" },
-      { title: "image3", src: "/images/branding/image3.jpg" },
-      { title: "image4", src: "/images/branding/image4.jpg" },
-      { title: "image5", src: "/images/branding/image5.jpg" },
-      { title: "image6", src: "/images/branding/image6.jpg" },
-      { title: "image7", src: "/images/branding/image7.jpg" },
-      { title: "image8", src: "/images/branding/image8.jpg" },
+      
       { title: "image9", src: "/images/branding/image9.JPG" },
-      { title: "image12", src: "/images/branding/image12.jpg" },
-      { title: "image13", src: "/images/branding/image13.jpg" },
-      { title: "image14", src: "/images/branding/image14.jpg" },
-      { title: "image15", src: "/images/branding/image15.jpg" },
-      { title: "image16", src: "/images/branding/image16.jpg" },
-      { title: "image17", src: "/images/branding/image17.jpg" },
-      { title: "image18", src: "/images/branding/image18.jpg" },
-      { title: "image19", src: "/images/branding/image19.jpg" },
-      { title: "image20", src: "/images/branding/image20.jpg" },
-      { title: "image21", src: "/images/branding/image21.jpg" },
-      { title: "image22", src: "/images/branding/image22.jpg" },
-      { title: "image23", src: "/images/branding/image23.jpg" },
-      { title: "image24", src: "/images/branding/image24.jpg" },
-      { title: "image25", src: "/images/branding/image25.jpg" },
-      { title: "image26", src: "/images/branding/image26.jpg" },
-      { title: "image27", src: "/images/branding/image27.jpg" },
-      { title: "image28", src: "/images/branding/image28.jpg" },
+      { title: "image18", src: "/images/branding/image18.jpg" }
     ],
     []
   );

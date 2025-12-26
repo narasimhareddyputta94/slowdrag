@@ -6,6 +6,7 @@ import FilmsShowcase from "@/components/sections/FilmsShowcase";
 import MobileFilmsShowcase from "@/components/sections/MobileFilmsShowcase";
 import Manifesto2 from "@/components/sections/Manifesto2";
 import DesignsShowcase from "@/components/sections/DesignsShowcase";
+import MobileDesignsShowcase from "@/components/sections/MobileDesignsShowcase";
 import RotatedVideoSection from "@/components/sections/RotatedVideoSection";
 import Footer from "@/components/footer/Footer";
 import HeroMeltWebGL from "@/components/hero/HeroMeltWebGL";
@@ -62,7 +63,7 @@ export default function Home() {
 <ManifestoMeltWebGLPage />
       {isMobile ? <MobileFilmsShowcase /> : <FilmsShowcase />}
       <Manifesto2 />
-      <DesignsShowcase />
+      {isMobile ? <MobileDesignsShowcase /> : <DesignsShowcase />}
       <RotatedVideoSection />
       <Footer />
     </main>
