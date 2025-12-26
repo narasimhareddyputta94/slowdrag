@@ -76,6 +76,7 @@ export default function FilmsShowcase() {
         "Slowdrag 1_subs.mov",
         "Slowdrag 2_subs.mov",
         "Slowdrag 3_subs.mov",
+        "Showreel.mov",
       ].sort((a, b) => a.localeCompare(b));
 
       return videoFiles.map((name) => ({

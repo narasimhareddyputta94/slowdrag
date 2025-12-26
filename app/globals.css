@@ -163,3 +163,134 @@ section[aria-label="Manifesto"][data-meltfill="1"] .manifesto-copy .manifesto-st
   -webkit-background-clip: text;
   background-clip: text;
 }
+
+
+/* --- Base Styles (No change to desktop) --- */
+.contact-card {
+  padding: 34px 34px 30px 120px; /* Default desktop padding */
+}
+
+.contact-card-quote {
+  position: absolute;
+  top: 80px;
+  right: 100px;
+  z-index: 10;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: pre-line;
+  letter-spacing: 0.12em;
+  line-height: 1.05;
+  font-weight: 700;
+  font-size: clamp(22px, 2.8vw, 34px);
+  max-width: 320px;
+  color: #fdfcfcff;
+  pointer-events: none;
+}
+
+.contact-form {
+  display: grid;
+  margin-top: clamp(240px, 26vh, 340px); /* Form starts low on desktop */
+  gap: 30px;
+  width: 100%;
+}
+
+.name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  width: 100%;
+  max-width: 520px;
+}
+
+.contact-field {
+  width: 100%;
+  max-width: 520px;
+  border: 3px solid rgba(0,0,0,0.82);
+  border-radius: 999px;
+  padding: 12px 16px;
+  background: transparent;
+  outline: none;
+  color: #fff;
+  font-family: var(--font-offbit);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 14px;
+}
+
+.message-field {
+  border-radius: 22px !important;
+  max-width: min(740px, 100%);
+  resize: none;
+}
+
+.contact-submit {
+  border: 2px solid rgba(83, 255, 77, 0.65);
+  border-radius: 999px;
+  padding: 10px 18px;
+  background: #000000;
+  color: #53ff4d;
+  font-family: var(--font-offbit);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.contact-outside-quote {
+  position: absolute;
+  right: -70px;
+  bottom: -10px;
+  z-index: 20;
+  font-family: var(--font-offbit);
+  white-space: pre;
+  color: #fff;
+  font-weight: 900;
+  font-size: clamp(20px, 1.8vw, 24px);
+}
+
+/* --- Mobile-Only Adjustments (Shrinking for Mobile) --- */
+@media (max-width: 767.98px) {
+  .contact-card {
+    min-height: 520px !important; /* Shorter box */
+    padding-left: 40px !important; /* Scaled down from 120px */
+    padding-right: 20px !important;
+  }
+
+  .contact-card-quote {
+    top: 40px !important; /* Moved up to fit */
+    right: 40px !important;
+    font-size: 20px !important;
+    max-width: 200px !important;
+  }
+
+  .contact-form {
+    margin-top: 160px !important; /* Form moves up to stay inside SVG */
+    gap: 15px !important; /* Tighter spacing */
+  }
+
+  .name-row {
+    grid-template-columns: 1fr !important; /* Stack names if too narrow */
+    gap: 15px !important;
+  }
+
+  .contact-field {
+    padding: 10px 14px !important;
+    font-size: 12px !important;
+    border-width: 2px !important;
+  }
+
+  .message-field {
+    height: 120px !important;
+  }
+
+  .contact-outside-quote {
+    position: relative !important; /* Don't float outside on mobile */
+    right: 0 !important;
+    bottom: 0 !important;
+    margin-top: 20px !important;
+    white-space: normal !important;
+    font-size: 18px !important;
+    padding: 0 10px;
+  }
+}
