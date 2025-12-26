@@ -89,18 +89,12 @@ export default function Footer() {
     <footer
       className="relative w-full text-white"
       style={{
-        backgroundColor: "#128277",
-        backgroundImage: "url(/images/background.png)",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
+        // Match navbar brand color
+        backgroundColor: "#c6376c",
         fontFamily: "var(--font-offbit)",
         textShadow: "0 2px 12px rgba(0,0,0,0.85)",
       }}
     >
-      {/* Contrast overlay for readability */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black/60" />
-
       <div className="relative z-10 mx-auto max-w-[1400px] px-10 md:px-16">
         <div className="overflow-x-auto">
           <div className="grid min-w-[1100px] grid-cols-3 py-14 md:py-16">

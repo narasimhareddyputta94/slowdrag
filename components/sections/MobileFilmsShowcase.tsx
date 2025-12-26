@@ -87,10 +87,19 @@ export default function WorldClassShowcase() {
   const currentFilm = films[activeIndex];
 
   return (
-    <section className="relative w-full h-[100svh] bg-[#020202] text-white flex flex-col overflow-hidden select-none font-sans">
+    <section className="relative w-full bg-[#020202] text-white flex flex-col overflow-hidden select-none font-offbit">
+      {/* Subtle premium backdrop */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-60"
+        style={{
+          background:
+            "radial-gradient(1000px 600px at 20% 15%, rgba(20,144,125,0.18), transparent 65%), radial-gradient(900px 520px at 80% 70%, rgba(255,255,255,0.06), transparent 70%)",
+        }}
+      />
       
       {/* --- 10% HEADER: MUSEUM STYLING --- */}
-      <header className="h-[12vh] flex flex-col items-center justify-center z-50 px-6 relative">
+      <header className="flex flex-col items-center justify-center z-50 px-6 pt-10 pb-6 relative">
         <motion.div 
           initial={{ opacity: 0, letterSpacing: "1em" }}
           animate={{ opacity: 1, letterSpacing: "0.5em" }}
@@ -109,9 +118,9 @@ export default function WorldClassShowcase() {
         </motion.div>
       </header>
 
-      {/* --- 68% CINEMATIC PORTAL: NO TEXT, PURE MOTION --- */}
+      {/* --- FULLSCREEN PLAYER (16:9) --- */}
       <main 
-        className="relative h-[68vh] w-full overflow-hidden"
+        className="relative h-[100svh] w-full overflow-hidden flex items-center justify-center"
         onTouchStart={(e) => setTouchStart(e.targetTouches[0].clientX)}
         onTouchEnd={(e) => {
           if (!touchStart) return;
@@ -122,29 +131,31 @@ export default function WorldClassShowcase() {
           setTouchStart(null);
         }}
       >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeIndex}
-            initial={{ opacity: 0, filter: "brightness(0.2) contrast(1.2)" }}
-            animate={{ opacity: 1, filter: "brightness(1) contrast(1)" }}
-            exit={{ opacity: 0, scale: 1.05, filter: "blur(20px)" }}
-            transition={{ duration: 0.8, ease: [0.19, 1, 0.22, 1] }}
-            className="absolute inset-0 w-full h-full"
-          >
-            <video
-              ref={videoRef}
-              src={currentFilm.src}
-              muted={isMuted}
-              autoPlay
-              playsInline
-              onEnded={handleNext}
-              className="w-full h-full object-cover scale-[1.02] pointer-events-none"
-            />
-            {/* Edge softening gradients */}
-            <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#020202] to-transparent z-10" />
-            <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#020202] to-transparent z-10" />
-          </motion.div>
-        </AnimatePresence>
+        <div className="relative h-full aspect-video overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeIndex}
+              initial={{ opacity: 0, filter: "brightness(0.2) contrast(1.2)" }}
+              animate={{ opacity: 1, filter: "brightness(1) contrast(1)" }}
+              exit={{ opacity: 0, scale: 1.05, filter: "blur(20px)" }}
+              transition={{ duration: 0.8, ease: [0.19, 1, 0.22, 1] }}
+              className="relative w-full h-full"
+            >
+              <video
+                ref={videoRef}
+                src={currentFilm.src}
+                muted={isMuted}
+                autoPlay
+                playsInline
+                onEnded={handleNext}
+                className="w-full h-full object-cover scale-[1.02] pointer-events-none"
+              />
+              {/* Edge softening gradients */}
+              <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#020202] to-transparent z-10" />
+              <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#020202] to-transparent z-10" />
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
         {/* Center Play Icon (Only on Pause) */}
         <AnimatePresence>
@@ -163,10 +174,10 @@ export default function WorldClassShowcase() {
         </AnimatePresence>
       </main>
 
-      {/* --- 20% PREMIUM FOOTER: WORLD CLASS STYLING --- */}
-      <footer className="h-[20vh] w-full px-8 flex flex-col justify-between py-6 z-50 bg-[#020202]">
+      {/* --- CONTENT BELOW PLAYER --- */}
+      <footer className="w-full px-8 pt-10 pb-10 z-50 bg-[#020202]">
         
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-7">
           {/* Narrative Description with Animated Weights */}
           <div className="flex flex-col items-center">
             <AnimatePresence mode="wait">
@@ -178,7 +189,7 @@ export default function WorldClassShowcase() {
                 className="text-center"
               >
                 
-                <p className="text-[17px] leading-snug text-neutral-300 max-w-[280px] mx-auto">
+                <p className="text-[16px] leading-snug text-white/75 max-w-[300px] mx-auto tracking-[0.08em] uppercase">
                   We work across <span className="text-white font-bold italic underline decoration-teal-500/30 underline-offset-4">narrative landscapes</span> to bring experimental emotion to life.
                 </p>
               </motion.div>
@@ -190,13 +201,14 @@ export default function WorldClassShowcase() {
             <motion.div 
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.95 }}
-              className="relative h-16 w-full rounded-full bg-white text-black flex items-center justify-center overflow-hidden shadow-[0_20px_40px_rgba(255,255,255,0.1)]"
+              className="relative h-16 w-full rounded-full bg-white text-black flex items-center justify-center overflow-hidden shadow-[0_20px_40px_rgba(255,255,255,0.12)] ring-1 ring-black/10"
             >
               <motion.div 
                 animate={{ x: ['-150%', '150%'] }}
                 transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
                 className="absolute inset-0 bg-gradient-to-r from-transparent via-teal-400/40 to-transparent skew-x-[35deg]"
               />
+              <div className="absolute inset-0 rounded-full ring-1 ring-white/40" />
               <span className="relative z-10 text-[12px] font-black tracking-[0.6em] uppercase">
                 Join Our Story
               </span>
@@ -205,7 +217,7 @@ export default function WorldClassShowcase() {
         </div>
 
         {/* Global Progress & Mute */}
-        <div className="flex justify-between items-center mt-4">
+        <div className="flex justify-between items-center mt-10">
           <div className="flex gap-2 items-center">
             {films.map((_, i) => (
               <div key={i} className="h-0.5 bg-white/10 w-6 rounded-full overflow-hidden">

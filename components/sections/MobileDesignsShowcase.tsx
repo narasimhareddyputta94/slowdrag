@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 type DesignItem = {
@@ -8,41 +8,76 @@ type DesignItem = {
   src: string;
 };
 
+function CenterPlayButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Play video"
+      className="group relative grid size-20 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
+      data-player-control
+    >
+      <img
+        src="/images/play2.png"
+        alt=""
+        className="relative z-10 h-12 w-12 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
+      />
+    </button>
+  );
+}
+
+function ControlButton({
+  label,
+  pressed,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={pressed}
+      data-player-control
+      className="group relative grid size-12 place-items-center rounded-full bg-black/35 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/45 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+      style={{
+        boxShadow: "0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)",
+      }}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
+      />
+      <span
+        aria-hidden
+        className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80"
+      />
+      <span
+        aria-hidden
+        className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md"
+      />
+      <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.05]">
+        {children}
+      </span>
+    </button>
+  );
+}
+
 export default function MobileDesignsShowcase() {
+  const tealColor = "#6fe7d3";
   const [activeIndex, setActiveIndex] = useState(0);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [isHeld, setIsHeld] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(true);
 
   const designs: DesignItem[] = useMemo(
     () =>
       [
-        // Put mobile-optimized images in:
-        //   public/mobile_images/branding/
-        // Then update the file names here.
-        { title: "image1.jpg", src: "/mobile_images/branding/image1.jpg" },
-        { title: "image2.gif", src: "/mobile_images/branding/image2.gif" },
-        { title: "image3.jpg", src: "/mobile_images/branding/image3.jpg" },
-        { title: "image4.jpg", src: "/mobile_images/branding/image4.jpg" },
-        { title: "image5.jpg", src: "/mobile_images/branding/image5.jpg" },
-        { title: "image6.jpg", src: "/mobile_images/branding/image6.jpg" },
-        { title: "image7.jpg", src: "/mobile_images/branding/image7.jpg" },
-        { title: "image8.jpg", src: "/mobile_images/branding/image8.jpg" },
-        { title: "image12.jpg", src: "/mobile_images/branding/image12.jpg" },
-        { title: "image13.jpg", src: "/mobile_images/branding/image13.jpg" },
-        { title: "image14.jpg", src: "/mobile_images/branding/image14.jpg" },
-        { title: "image15.jpg", src: "/mobile_images/branding/image15.jpg" },
-        { title: "image16.jpg", src: "/mobile_images/branding/image16.jpg" },
-        { title: "image17.jpg", src: "/mobile_images/branding/image17.jpg" },
-        { title: "image19.jpg", src: "/mobile_images/branding/image19.jpg" },
-        { title: "image20.jpg", src: "/mobile_images/branding/image20.jpg" },
-        { title: "image21.jpg", src: "/mobile_images/branding/image21.jpg" },
-        { title: "image22.jpg", src: "/mobile_images/branding/image22.jpg" },
-        { title: "image23.jpg", src: "/mobile_images/branding/image23.jpg" },
-        { title: "image24.jpg", src: "/mobile_images/branding/image24.jpg" },
-        { title: "image25.jpg", src: "/mobile_images/branding/image25.jpg" },
-        { title: "image26.jpg", src: "/mobile_images/branding/image26.jpg" },
-        { title: "image27.jpg", src: "/mobile_images/branding/image27.jpg" },
-        { title: "image28.jpg", src: "/mobile_images/branding/image28.jpg" }
+        { title: "brandbook draft", src: "/mobile_images/brandbook draft.mp4" }
       ],
     []
   );
@@ -59,15 +94,52 @@ export default function MobileDesignsShowcase() {
     setActiveIndex((prev) => (prev - 1 + designs.length) % designs.length);
   };
 
-  // Fast, continuous autoplay (mobile-only section; desktop remains unchanged elsewhere)
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Keep DOM video element in sync with mute state
   useEffect(() => {
-    if (!hasDesigns) return;
-    if (isHeld) return;
-    const id = window.setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % designs.length);
-    }, 1400);
-    return () => window.clearInterval(id);
-  }, [hasDesigns, designs.length, isHeld]);
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = muted;
+    if (!muted) {
+      const p = v.play();
+      if (p) {
+        p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      }
+    }
+  }, [muted]);
+
+  const toggleMute = () => setMuted((m) => !m);
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) {
+      const p = v.play();
+      if (p) {
+        p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      }
+      return;
+    }
+    v.pause();
+    setIsPlaying(false);
+  };
+
+  const pauseVideo = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (!v.paused) {
+      v.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const handlePlayerPointerDown = (e: React.PointerEvent) => {
+    if (!isPlaying) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest?.("[data-player-control]")) return;
+    pauseVideo();
+  };
 
   const currentDesign = hasDesigns ? designs[activeIndex] : undefined;
 
@@ -94,23 +166,7 @@ export default function MobileDesignsShowcase() {
 
       <main
         className="relative h-[76vh] w-full overflow-hidden"
-        onTouchStart={(e) => {
-          setIsHeld(true);
-          setTouchStart(e.targetTouches[0].clientX);
-        }}
-        onTouchEnd={(e) => {
-          setIsHeld(false);
-          if (touchStart !== null) {
-            const dist = touchStart - e.changedTouches[0].clientX;
-            if (dist > 50) handleNext();
-            else if (dist < -50) handlePrev();
-          }
-          setTouchStart(null);
-        }}
-        onTouchCancel={() => {
-          setIsHeld(false);
-          setTouchStart(null);
-        }}
+        onPointerDown={handlePlayerPointerDown}
         onContextMenu={(e) => e.preventDefault()}
       >
         <div className="absolute inset-0 bg-black" />
@@ -143,19 +199,26 @@ export default function MobileDesignsShowcase() {
               transition={{ duration: 0.45, ease: [0.19, 1, 0.22, 1] }}
               className="absolute inset-0 w-full h-full"
             >
-              <motion.img
-                src={currentDesign.src}
-                alt={currentDesign.title}
+              <motion.video
+                ref={videoRef}
+                src={encodeURI(currentDesign.src)}
+                aria-label={currentDesign.title}
                 className="absolute inset-0 w-full h-full object-contain"
-                draggable={false}
-                animate={{
-                  y: [0, -10, 0, 8, 0],
-                  rotate: [0, -0.6, 0.5, 0, 0],
-                }}
-                transition={{
-                  duration: 2.2,
-                  repeat: Infinity,
-                  ease: "easeInOut",
+                muted={muted}
+                autoPlay
+                loop
+                playsInline
+                preload="metadata"
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onCanPlay={() => {
+                  const v = videoRef.current;
+                  if (!v) return;
+                  v.muted = muted;
+                  const p = v.play();
+                  if (p) {
+                    p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+                  }
                 }}
               />
 
@@ -175,6 +238,64 @@ export default function MobileDesignsShowcase() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Center overlay play button */}
+        {!isPlaying ? (
+          <div
+            className="absolute inset-0 z-20 flex items-center justify-center"
+            style={{ pointerEvents: "auto" }}
+          >
+            <CenterPlayButton onClick={togglePlay} />
+          </div>
+        ) : null}
+
+        {/* Bottom-right controls: play/pause + mute */}
+        <div className="absolute z-30 flex items-center gap-3" style={{ right: "16px", bottom: "16px" }}>
+          <ControlButton onClick={togglePlay} pressed={isPlaying} label={isPlaying ? "Pause video" : "Play video"}>
+            {isPlaying ? (
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={tealColor}
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+              >
+                <path d="M7 5v14" />
+                <path d="M17 5v14" />
+              </svg>
+            ) : (
+              <img src="/images/play2.png" alt="" className="h-6 w-6 object-contain" />
+            )}
+          </ControlButton>
+
+          <ControlButton onClick={toggleMute} pressed={!muted} label={muted ? "Unmute video" : "Mute video"}>
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={tealColor}
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+            >
+              <path d="M11 5L6 9H3v6h3l5 4V5z" />
+              {muted ? (
+                <path d="M22 9l-7 7" />
+              ) : (
+                <>
+                  <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                  <path d="M18.8 6.2a8.5 8.5 0 0 1 0 11.6" />
+                </>
+              )}
+            </svg>
+          </ControlButton>
+        </div>
       </main>
 
       <footer className="h-[12vh] w-full px-8 flex items-center justify-end z-50 bg-[#020202]">

@@ -9,22 +9,86 @@ type DesignItem = {
 
 type Size = { width: number; height: number };
 
+function CenterPlayButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Play video"
+      className="group relative grid size-20 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
+      data-player-control
+    >
+      <img
+        src="/images/play2.png"
+        alt=""
+        className="relative z-10 h-12 w-12 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
+      />
+    </button>
+  );
+}
+
+function ControlButton({
+  label,
+  pressed,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={pressed}
+      data-player-control
+      className="group relative grid size-12 place-items-center rounded-full bg-black/35 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/45 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+      style={{
+        boxShadow: "0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)",
+      }}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
+      />
+      <span
+        aria-hidden
+        className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80"
+      />
+      <span
+        aria-hidden
+        className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md"
+      />
+      <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.05]">
+        {children}
+      </span>
+    </button>
+  );
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
 export default function DesignsShowcase() {
+  const tealColor = "#6fe7d3";
+
   const designs: DesignItem[] = useMemo(
     () => [
-      
-      { title: "image9", src: "/images/branding/image9.JPG" },
-      { title: "image18", src: "/images/branding/image18.jpg" }
+      { title: "brandbook draft", src: "/mobile_images/brandbook draft.mp4" }
     ],
     []
   );
 
+  const [muted, setMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
   const startIndex = useMemo(() => {
-    const idx = designs.findIndex((d) => d.title === "image9");
+    const idx = designs.findIndex((d) => d.title === "brandbook draft");
     return idx >= 0 ? idx : 0;
   }, [designs]);
 
@@ -74,6 +138,66 @@ export default function DesignsShowcase() {
   }, []);
 
   const padding = 0;
+
+  // Keep DOM video element in sync with mute state
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = muted;
+    if (!muted) {
+      const p = v.play();
+      if (p) {
+        p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      }
+    }
+  }, [muted]);
+
+  // Reload + play when media changes
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = muted;
+    try {
+      v.currentTime = 0;
+    } catch {}
+    v.load();
+    const p = v.play();
+    if (p) {
+      p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
+  }, [firstDesign?.src, muted]);
+
+  const toggleMute = () => setMuted((m) => !m);
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) {
+      const p = v.play();
+      if (p) {
+        p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      }
+      return;
+    }
+    v.pause();
+    setIsPlaying(false);
+  };
+
+  const pauseVideo = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (!v.paused) {
+      v.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const handlePlayerPointerDown = (e: React.PointerEvent) => {
+    if (!isPlaying) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest?.("[data-player-control]")) return;
+    pauseVideo();
+  };
 
   const shapePath = `
     M 25,0
@@ -126,7 +250,10 @@ export default function DesignsShowcase() {
   return (
     <section className="relative w-full min-h-screen bg-black text-white overflow-hidden flex items-center justify-center font-sans">
       <div className="relative w-[96%] md:w-[94%] lg:w-[90%] xl:w-[86%] max-w-[1500px] flex items-center justify-center">
-        <div className="relative w-full aspect-[2.05/1] md:aspect-[2.0/1] isolation-isolate">
+        <div
+          className="relative w-full aspect-[2.05/1] md:aspect-[2.0/1] isolation-isolate"
+          onPointerDown={handlePlayerPointerDown}
+        >
           {/* SVG layer */}
           <svg
             viewBox="0 0 1000 600"
@@ -218,9 +345,26 @@ export default function DesignsShowcase() {
                             overflow: "hidden",
                           }}
                         >
-                          <img
-                            src={firstDesign.src}
-                            alt={firstDesign.title}
+                          <video
+                            ref={videoRef}
+                            src={encodeURI(firstDesign.src)}
+                            aria-label={firstDesign.title}
+                            muted={muted}
+                            autoPlay
+                            loop
+                            playsInline
+                            preload="metadata"
+                            onPlay={() => setIsPlaying(true)}
+                            onPause={() => setIsPlaying(false)}
+                            onCanPlay={() => {
+                              const v = videoRef.current;
+                              if (!v) return;
+                              v.muted = muted;
+                              const p = v.play();
+                              if (p) {
+                                p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+                              }
+                            }}
                             style={{
                               width: "100%",
                               height: "100%",
@@ -264,6 +408,71 @@ export default function DesignsShowcase() {
               strokeWidth="1.5"
             />
           </svg>
+
+          {/* Center overlay play button */}
+          {!isPlaying ? (
+            <div
+              className="absolute z-40"
+              style={{ left: "50%", top: "48%", transform: "translate(-50%, -50%)" }}
+            >
+              <CenterPlayButton onClick={togglePlay} />
+            </div>
+          ) : null}
+
+          {/* Bottom-right controls: play/pause + mute */}
+          <div
+            className="absolute z-40 flex items-center gap-3"
+            style={{ right: "24px", bottom: "80px" }}
+          >
+            <ControlButton
+              onClick={togglePlay}
+              pressed={isPlaying}
+              label={isPlaying ? "Pause video" : "Play video"}
+            >
+              {isPlaying ? (
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={tealColor}
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+                >
+                  <path d="M7 5v14" />
+                  <path d="M17 5v14" />
+                </svg>
+              ) : (
+                <img src="/images/play2.png" alt="" className="h-6 w-6 object-contain" />
+              )}
+            </ControlButton>
+
+            <ControlButton onClick={toggleMute} pressed={!muted} label={muted ? "Unmute video" : "Mute video"}>
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={tealColor}
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+              >
+                <path d="M11 5L6 9H3v6h3l5 4V5z" />
+                {muted ? (
+                  <path d="M22 9l-7 7" />
+                ) : (
+                  <>
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                    <path d="M18.8 6.2a8.5 8.5 0 0 1 0 11.6" />
+                  </>
+                )}
+              </svg>
+            </ControlButton>
+          </div>
 
           {/* === HUD INTERFACE === */}
 
