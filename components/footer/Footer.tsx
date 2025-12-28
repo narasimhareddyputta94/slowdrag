@@ -28,7 +28,7 @@ function Tile({
       href={href}
       aria-label={label}
       // Tile Size: h-16 w-16 (64px)
-      className="inline-flex h-16 w-16 items-center justify-center rounded-[12px] bg-white shadow-[0_1px_0_rgba(0,0,0,0.18)] transition hover:-translate-y-[1px] active:translate-y-0"
+      className="footer-tile inline-flex h-16 w-16 items-center justify-center rounded-[12px] bg-white shadow-[0_1px_0_rgba(0,0,0,0.18)] transition hover:-translate-y-[1px] active:translate-y-0"
       style={{ 
         WebkitTapHighlightColor: "transparent",
         backgroundColor: "white" 
@@ -87,7 +87,7 @@ function Facebook() {
 export default function Footer() {
   return (
     <footer
-      className="relative w-full text-white"
+      className="footer-root relative w-full text-white"
       style={{
         // Match navbar brand color
         backgroundColor: "#c6376c",
@@ -95,12 +95,12 @@ export default function Footer() {
         textShadow: "0 2px 12px rgba(0,0,0,0.85)",
       }}
     >
-      <div className="relative z-10 mx-auto max-w-[1400px] px-10 md:px-16">
-        <div className="overflow-x-auto">
-          <div className="grid min-w-[1100px] grid-cols-3 py-14 md:py-16">
+      <div className="footer-inner relative z-10 mx-auto max-w-[1400px] px-10 md:px-16">
+        <div className="footer-scroll overflow-x-auto">
+          <div className="footer-grid grid min-w-[1100px] grid-cols-3 py-14 md:py-16">
             {/* BOX 1 */}
-            <div className="relative flex min-h-[320px] flex-col items-start justify-between pr-14">
-              <div className="w-[620px] max-w-full">
+            <div className="footer-box1 relative flex min-h-[320px] flex-col items-start justify-between pr-14">
+              <div className="footer-logo w-[620px] max-w-full">
                 <img
                   src="/images/fulllogo.png"
                   alt="Slow Drag Studio"
@@ -113,7 +113,7 @@ export default function Footer() {
               <Link
                 href={LINKS.contact}
                 aria-label="Contact us"
-                className="mb-12 inline-flex items-center justify-center rounded-full no-underline transition hover:bg-black/30 hover:backdrop-blur-md focus:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/60"
+                className="footer-cta mb-12 inline-flex items-center justify-center rounded-full no-underline transition hover:bg-black/30 hover:backdrop-blur-md focus:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/60"
                 style={{
                   background: "transparent",
                   border: "2px solid white",
@@ -134,7 +134,7 @@ export default function Footer() {
             </div>
 
             {/* BOX 2 */}
-            <div className="flex min-h-[320px] items-center justify-center px-14">
+            <div className="footer-box2 flex min-h-[320px] items-center justify-center px-14">
               <div className="text-center">
                 <div className="text-[16px] tracking-[0.34em]">SOCIALS</div>
                 <div className="mx-auto mt-2 h-[3px] w-[62px] bg-white" />
@@ -154,15 +154,15 @@ export default function Footer() {
             </div>
 
             {/* BOX 3 */}
-            <div className="flex min-h-[320px] flex-col pl-14" style={{ padding: "60px 0" }}>
-              <div className="ml-auto text-right text-[26px] leading-[1.55]">
+            <div className="footer-box3 flex min-h-[320px] flex-col pl-14" style={{ padding: "60px 0" }}>
+              <div className="footer-quote ml-auto text-right text-[26px] leading-[1.55]">
                 <div>Slow Drag Studios makes images that stay.</div>
                 <div>They bend time.</div>
                 <div>They hold memory.</div>
                 <div>They refuse to disappear.</div>
               </div>
 
-              <div className="mt-10 flex w-full justify-center" style={{ padding: "30px 0" }}>
+              <div className="footer-deets mt-10 flex w-full justify-center" style={{ padding: "30px 0" }}>
                 <div className="text-center">
                   <div className="text-[12px] tracking-[0.34em]">CONTACT DEETS</div>
                   <div className="mx-auto mt-2 h-[3px] w-[122px] bg-white" />
@@ -172,6 +172,84 @@ export default function Footer() {
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        /* Mobile-only footer optimization; desktop remains unchanged */
+        @media (max-width: 767px) {
+          .footer-inner {
+            padding-left: 20px !important;
+            padding-right: 20px !important;
+          }
+
+          .footer-scroll {
+            overflow-x: visible !important;
+          }
+
+          .footer-grid {
+            min-width: 0 !important;
+            grid-template-columns: 1fr !important;
+            padding-top: 44px !important;
+            padding-bottom: 44px !important;
+            row-gap: 36px !important;
+          }
+
+          .footer-box1,
+          .footer-box2,
+          .footer-box3 {
+            min-height: auto !important;
+          }
+
+          .footer-box1 {
+            padding-right: 0 !important;
+            align-items: center !important;
+            text-align: center !important;
+            gap: 18px !important;
+          }
+
+          .footer-logo {
+            width: 100% !important;
+            max-width: 520px !important;
+          }
+
+          .footer-logo img {
+            width: 100% !important;
+          }
+
+          .footer-cta {
+            width: 100% !important;
+            max-width: 320px !important;
+            margin-bottom: 0 !important;
+          }
+
+          .footer-box2 {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+          }
+
+          .footer-tile {
+            width: 56px !important;
+            height: 56px !important;
+            border-radius: 14px !important;
+          }
+
+          .footer-box3 {
+            padding-left: 0 !important;
+            padding: 28px 0 !important;
+          }
+
+          .footer-quote {
+            margin-left: 0 !important;
+            text-align: center !important;
+            font-size: 18px !important;
+            line-height: 1.7 !important;
+          }
+
+          .footer-deets {
+            padding: 18px 0 !important;
+            margin-top: 22px !important;
+          }
+        }
+      `}</style>
     </footer>
   );
 }
