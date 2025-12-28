@@ -19,6 +19,8 @@ function CenterPlayButton({ onClick }: { onClick: () => void }) {
       <img
         src="/images/play2.png"
         alt=""
+        width={64}
+        height={64}
         className="relative z-10 h-10 w-10 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
       />
     </button>
@@ -481,6 +483,8 @@ export default function FilmsShowcase() {
             <img
               src="/images/cursor-new.png"
               alt="Previous"
+              width={190}
+              height={155}
               style={{ width: "40px", height: "40px" }}
               className="object-contain rotate-225 transition-transform duration-300 group-hover:scale-110 drop-shadow-[0_0_8px_rgba(232,233,56,0.6)]"
             />
@@ -497,6 +501,8 @@ export default function FilmsShowcase() {
             <img
               src="/images/cursor-new.png"
               alt="Next"
+              width={190}
+              height={155}
               style={{ width: "40px", height: "40px" }}
               className="object-contain rotate-45 transition-transform duration-300 group-hover:scale-110 drop-shadow-[0_0_8px_rgba(232,233,56,0.6)]"
             />

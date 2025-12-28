@@ -102,6 +102,8 @@ export default function Footer() {
                 <img
                   src="/images/fulllogo.png"
                   alt="Slow Drag Studio"
+                  width={747}
+                  height={421}
                   className="w-[82%] select-none object-contain"
                   draggable={false}
                 />

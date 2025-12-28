@@ -19,6 +19,8 @@ function CenterPlayButton({ onClick }: { onClick: () => void }) {
       <img
         src="/images/play2.png"
         alt=""
+        width={64}
+        height={64}
         className="relative z-10 h-10 w-10 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
       />
     </button>
