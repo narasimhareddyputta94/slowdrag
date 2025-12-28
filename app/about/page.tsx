@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Navbar from "@/components/nav/Navbar";
-import { offBit, offBitBold } from "@/app/fonts";
 
 export default function AboutPage() {
   const brandColor = "#c6376c";
@@ -127,13 +126,12 @@ Z
               <text
                 x="1070"
                 y="345"
-                className={offBit.className}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fill="#ffffff"
                 fontSize="24"
                 fontWeight="700"
-                style={{ letterSpacing: "1px" }}
+                style={{ letterSpacing: "1px", fontFamily: "var(--font-offbit)" }}
               >
                 ABOUT US
               </text>
@@ -144,7 +142,10 @@ Z
         </div>
 
         {/* Text centered below the coloured image (no background / no borders) */}
-        <div className={`${offBit.className} mx-auto mt-6 max-w-7xl px-6 py-16 text-center sm:px-10 sm:py-20 space-y-12`}>
+        <div
+          className="mx-auto mt-6 max-w-7xl px-6 py-16 text-center sm:px-10 sm:py-20 space-y-12"
+          style={{ fontFamily: "var(--font-offbit)" }}
+        >
           <p className="font-normal text-white/90 !text-[30px] !leading-relaxed sm:!text-[34px] lg:!text-[40px]">
             Slow Drag Studios is a design and film studio but more importantly,
             <br />

@@ -844,12 +844,14 @@ export default function HeroMeltWebGL({
     const isSmallScreen = window.matchMedia?.("(max-width: 768px)")?.matches ?? false;
 
     let cancelled = false;
+    let started = false;
     let cleanup: (() => void) | undefined;
     let timeoutId: number | undefined;
     let idleId: number | undefined;
 
     const start = () => {
-      if (cancelled) return;
+      if (cancelled || started) return;
+      started = true;
 
       const gl = canvas.getContext("webgl", {
         alpha: false,
@@ -1034,23 +1036,40 @@ export default function HeroMeltWebGL({
       };
     };
 
-    if (isSmallScreen) {
-      const w = window as unknown as {
-        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-        cancelIdleCallback?: (id: number) => void;
-      };
+    const w = window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
 
-      if (typeof w.requestIdleCallback === "function") {
-        idleId = w.requestIdleCallback(start, { timeout: 1500 });
-      } else {
-        timeoutId = window.setTimeout(start, 450);
-      }
-    } else {
+    const startNow = () => {
+      if (cancelled || started) return;
+      if (idleId !== undefined && typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
       start();
+    };
+
+    // Start as soon as the user interacts (preserves behavior), otherwise defer to idle.
+    window.addEventListener("pointerdown", startNow, { passive: true, once: true });
+    window.addEventListener("wheel", startNow, { passive: true, once: true });
+    window.addEventListener("touchstart", startNow, { passive: true, once: true });
+    window.addEventListener("keydown", startNow, { passive: true, once: true });
+
+    const idleTimeout = isSmallScreen ? 1500 : 900;
+    const fallbackDelay = isSmallScreen ? 450 : 160;
+
+    if (typeof w.requestIdleCallback === "function") {
+      idleId = w.requestIdleCallback(start, { timeout: idleTimeout });
+    } else {
+      timeoutId = window.setTimeout(start, fallbackDelay);
     }
 
     return () => {
       cancelled = true;
+      window.removeEventListener("pointerdown", startNow);
+      window.removeEventListener("wheel", startNow);
+      window.removeEventListener("touchstart", startNow);
+      window.removeEventListener("keydown", startNow);
+
       const w = window as unknown as { cancelIdleCallback?: (id: number) => void };
       if (idleId !== undefined && typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
@@ -1084,6 +1103,8 @@ export default function HeroMeltWebGL({
 
   const posterBoxW = `min(${posterWidth}px, 88vw)`;
   const posterBoxH = `min(${Math.max(1, Math.round(posterHeight * 0.867))}px, 40vh)`;
+
+  const posterIsSvg = /\.svg(\?|#|$)/i.test(imageSrc);
 
   return (
     <section
@@ -1127,7 +1148,8 @@ export default function HeroMeltWebGL({
             alt={posterAlt}
             fill
             priority
-            unoptimized
+            unoptimized={posterIsSvg}
+            quality={80}
             fetchPriority="high"
             sizes="(max-width: 768px) 88vw, 1200px"
             style={{

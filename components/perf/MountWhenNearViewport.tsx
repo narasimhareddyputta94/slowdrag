@@ -26,8 +26,8 @@ export default function MountWhenNearViewport({
     if (mounted) return;
 
     if (typeof IntersectionObserver === "undefined") {
-      setMounted(true);
-      return;
+      const t = window.setTimeout(() => setMounted(true), 0);
+      return () => window.clearTimeout(t);
     }
 
     const el = hostRef.current;
