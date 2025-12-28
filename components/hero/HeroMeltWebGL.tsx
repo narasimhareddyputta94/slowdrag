@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -96,12 +97,6 @@ function hexToRgb(hex: string) {
     g: parseInt(n.slice(2, 4), 16),
     b: parseInt(n.slice(4, 6), 16),
   };
-}
-
-function rgbaFromHex(hex: string, a: number) {
-  const { r, g, b } = hexToRgb(hex);
-  const aa = Math.max(0, Math.min(1, a));
-  return `rgba(${r}, ${g}, ${b}, ${aa})`;
 }
 
 /* ---------------- Shaders ---------------- */
@@ -774,28 +769,24 @@ export default function HeroMeltWebGL({
       return rect.top <= 0 && rect.bottom >= winH * 0.85;
     };
 
-    // Inside HeroMeltWebGL.tsx, locate the applyDelta function within the scroll-lock useEffect:
+    const applyDelta = (dy: number) => {
+      const winH = window.innerHeight || 900;
+      const lockDistance = winH;
 
-const applyDelta = (dy: number) => {
-  const winH = window.innerHeight || 900;
-  const lockDistance = winH;
-  
-  s.virtualScroll = Math.max(0, Math.min(lockDistance, s.virtualScroll + dy));
-  
-  // Precision check: When the melt hits the bottom of the lock
-  if (s.virtualScroll >= lockDistance - 1) { 
-    if (!s.lockDone) {
-      s.lockDone = true;
-      s.lockActive = false;
-      
-      // Fire the sync signal to Manifesto
-      if (!meltFinishedOnceRef.current) {
-        meltFinishedOnceRef.current = true;
-        onMeltFinishedRef.current?.(); 
+      s.virtualScroll = Math.max(0, Math.min(lockDistance, s.virtualScroll + dy));
+
+      if (s.virtualScroll >= lockDistance - 1) {
+        if (!s.lockDone) {
+          s.lockDone = true;
+          s.lockActive = false;
+
+          if (!meltFinishedOnceRef.current) {
+            meltFinishedOnceRef.current = true;
+            onMeltFinishedRef.current?.();
+          }
+        }
       }
-    }
-  }
-};
+    };
 
     const onWheel = (e: WheelEvent) => {
       if (!shouldLockNow()) return;
@@ -852,114 +843,124 @@ const applyDelta = (dy: number) => {
 
     const isSmallScreen = window.matchMedia?.("(max-width: 768px)")?.matches ?? false;
 
-    const gl = canvas.getContext("webgl", {
-      alpha: false,
-      premultipliedAlpha: true,
-      antialias: false,
-      powerPreference: isSmallScreen ? "low-power" : "high-performance",
-      failIfMajorPerformanceCaveat: false,
-    });
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    let timeoutId: number | undefined;
+    let idleId: number | undefined;
 
-    if (!gl) return;
-    const s = S.current;
-    s.gl = gl;
-    if (!s.seed) s.seed = Math.random() * 1000;
-    s.t0 = performance.now();
+    const start = () => {
+      if (cancelled) return;
 
-    const maskProg = createProgram(gl, shaders.VERT, shaders.MASK_FRAG);
-    const renderProg = createProgram(gl, shaders.VERT, shaders.RENDER_FRAG);
-    const postProg = createProgram(gl, shaders.VERT, shaders.POST_FRAG);
-    const blitProg = createProgram(gl, shaders.VERT, BLIT_FRAG);
+      const gl = canvas.getContext("webgl", {
+        alpha: false,
+        premultipliedAlpha: true,
+        antialias: false,
+        powerPreference: isSmallScreen ? "low-power" : "high-performance",
+        failIfMajorPerformanceCaveat: false,
+      });
 
-    if (!maskProg || !renderProg || !postProg || !blitProg) return;
-    s.maskProg = maskProg;
-    s.renderProg = renderProg;
-    s.postProg = postProg;
-    s.blitProg = blitProg;
+      if (!gl) return;
+      const s = S.current;
+      s.gl = gl;
+      if (!s.seed) s.seed = Math.random() * 1000;
+      s.t0 = performance.now();
 
-    s.triBuf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, s.triBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const maskProg = createProgram(gl, shaders.VERT, shaders.MASK_FRAG);
+      const renderProg = createProgram(gl, shaders.VERT, shaders.RENDER_FRAG);
+      const postProg = createProgram(gl, shaders.VERT, shaders.POST_FRAG);
+      const blitProg = createProgram(gl, shaders.VERT, BLIT_FRAG);
 
-    [maskProg, renderProg, postProg, blitProg].forEach((p) => {
-      const loc = gl.getAttribLocation(p, "a_pos");
-      gl.enableVertexAttribArray(loc);
-      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    });
+      if (!maskProg || !renderProg || !postProg || !blitProg) return;
+      s.maskProg = maskProg;
+      s.renderProg = renderProg;
+      s.postProg = postProg;
+      s.blitProg = blitProg;
 
-    s.u_mask = {
-      logo: gl.getUniformLocation(maskProg, "u_logo"),
-      prevMask: gl.getUniformLocation(maskProg, "u_prevMask"),
-      res: gl.getUniformLocation(maskProg, "u_res"),
-      imgRes: gl.getUniformLocation(maskProg, "u_imgRes"),
-      cover: gl.getUniformLocation(maskProg, "u_cover"),
-      time: gl.getUniformLocation(maskProg, "u_time"),
-      anim: gl.getUniformLocation(maskProg, "u_anim"),
-      seed: gl.getUniformLocation(maskProg, "u_seed"),
-    };
-    s.u_render = {
-      logo: gl.getUniformLocation(renderProg, "u_logo"),
-      mask: gl.getUniformLocation(renderProg, "u_mask"),
-      res: gl.getUniformLocation(renderProg, "u_res"),
-      imgRes: gl.getUniformLocation(renderProg, "u_imgRes"),
-      cover: gl.getUniformLocation(renderProg, "u_cover"),
-      anim: gl.getUniformLocation(renderProg, "u_anim"),
-      seed: gl.getUniformLocation(renderProg, "u_seed"),
-      progress: gl.getUniformLocation(renderProg, "u_progress"),
-      brand: gl.getUniformLocation(renderProg, "u_brand"),
-    };
-    s.u_post = {
-      scene: gl.getUniformLocation(postProg, "u_scene"),
-      res: gl.getUniformLocation(postProg, "u_res"),
-      anim: gl.getUniformLocation(postProg, "u_anim"),
-      seed: gl.getUniformLocation(postProg, "u_seed"),
-      progress: gl.getUniformLocation(postProg, "u_progress"),
-    };
-    s.u_blit = gl.getUniformLocation(blitProg, "u_tex");
+      s.triBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, s.triBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
 
-    const logoTex = gl.createTexture();
-    s.logoTex = logoTex;
-    gl.bindTexture(gl.TEXTURE_2D, logoTex);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      [maskProg, renderProg, postProg, blitProg].forEach((p) => {
+        const loc = gl.getAttribLocation(p, "a_pos");
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      });
 
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = imageSrc;
+      s.u_mask = {
+        logo: gl.getUniformLocation(maskProg, "u_logo"),
+        prevMask: gl.getUniformLocation(maskProg, "u_prevMask"),
+        res: gl.getUniformLocation(maskProg, "u_res"),
+        imgRes: gl.getUniformLocation(maskProg, "u_imgRes"),
+        cover: gl.getUniformLocation(maskProg, "u_cover"),
+        time: gl.getUniformLocation(maskProg, "u_time"),
+        anim: gl.getUniformLocation(maskProg, "u_anim"),
+        seed: gl.getUniformLocation(maskProg, "u_seed"),
+      };
+      s.u_render = {
+        logo: gl.getUniformLocation(renderProg, "u_logo"),
+        mask: gl.getUniformLocation(renderProg, "u_mask"),
+        res: gl.getUniformLocation(renderProg, "u_res"),
+        imgRes: gl.getUniformLocation(renderProg, "u_imgRes"),
+        cover: gl.getUniformLocation(renderProg, "u_cover"),
+        anim: gl.getUniformLocation(renderProg, "u_anim"),
+        seed: gl.getUniformLocation(renderProg, "u_seed"),
+        progress: gl.getUniformLocation(renderProg, "u_progress"),
+        brand: gl.getUniformLocation(renderProg, "u_brand"),
+      };
+      s.u_post = {
+        scene: gl.getUniformLocation(postProg, "u_scene"),
+        res: gl.getUniformLocation(postProg, "u_res"),
+        anim: gl.getUniformLocation(postProg, "u_anim"),
+        seed: gl.getUniformLocation(postProg, "u_seed"),
+        progress: gl.getUniformLocation(postProg, "u_progress"),
+      };
+      s.u_blit = gl.getUniformLocation(blitProg, "u_tex");
 
-    img.onload = () => {
-      const MAX = 4096;
-      const iw = img.naturalWidth || 1024;
-      const ih = img.naturalHeight || 1024;
-      const sc = Math.min(1, Math.min(MAX / iw, MAX / ih));
-      const w = Math.max(1, Math.floor(iw * sc));
-      const h = Math.max(1, Math.floor(ih * sc));
-      s.imgW = w;
-      s.imgH = h;
+      const logoTex = gl.createTexture();
+      s.logoTex = logoTex;
+      gl.bindTexture(gl.TEXTURE_2D, logoTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-      const off = document.createElement("canvas");
-      off.width = w;
-      off.height = h;
-      const ctx = off.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, w, h);
-        ctx.drawImage(img, 0, 0, w, h);
-        gl.bindTexture(gl.TEXTURE_2D, s.logoTex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, off);
-      } else {
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-      }
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.src = imageSrc;
 
-      s.loaded = true;
-      cancelAnimationFrame(s.raf);
-      if (loopRef.current) s.raf = requestAnimationFrame(loopRef.current);
-    };
+      img.onload = () => {
+        if (cancelled) return;
 
-    const resize = () => {
+        const MAX = 4096;
+        const iw = img.naturalWidth || 1024;
+        const ih = img.naturalHeight || 1024;
+        const sc = Math.min(1, Math.min(MAX / iw, MAX / ih));
+        const w = Math.max(1, Math.floor(iw * sc));
+        const h = Math.max(1, Math.floor(ih * sc));
+        s.imgW = w;
+        s.imgH = h;
+
+        const off = document.createElement("canvas");
+        off.width = w;
+        off.height = h;
+        const ctx = off.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          gl.bindTexture(gl.TEXTURE_2D, s.logoTex);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, off);
+        } else {
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+        }
+
+        s.loaded = true;
+        cancelAnimationFrame(s.raf);
+        if (loopRef.current) s.raf = requestAnimationFrame(loopRef.current);
+      };
+
+      const resize = () => {
       // ✅ CRITICAL TS FIX: cache parent in a const
       const parent = canvas.parentElement;
       if (!parent) return;
@@ -1007,29 +1008,53 @@ const applyDelta = (dy: number) => {
       if (s.sceneFB) gl.deleteFramebuffer(s.sceneFB);
       s.sceneTex = makeTex(gl, W, H);
       if (s.sceneTex) s.sceneFB = attachFB(gl, s.sceneTex);
-    };
+      };
 
-    const ro = new ResizeObserver(() => {
+      const ro = new ResizeObserver(() => {
       // Debounce to a frame (avoids resize spam)
       requestAnimationFrame(resize);
-    });
+      });
 
     // ✅ TS FIX: cache parent + guard before observe
-    const parent = canvas.parentElement;
-    if (!parent) return;
-    ro.observe(parent);
+      const parent = canvas.parentElement;
+      if (!parent) return;
+      ro.observe(parent);
 
-    resize();
+      resize();
+
+      cleanup = () => {
+        ro.disconnect();
+        cancelAnimationFrame(s.raf);
+        if (s.fixScrollRaf) cancelAnimationFrame(s.fixScrollRaf);
+
+        const { gl } = s;
+        if (gl) {
+          gl.getExtension("WEBGL_lose_context")?.loseContext();
+        }
+      };
+    };
+
+    if (isSmallScreen) {
+      const w = window as unknown as {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+        cancelIdleCallback?: (id: number) => void;
+      };
+
+      if (typeof w.requestIdleCallback === "function") {
+        idleId = w.requestIdleCallback(start, { timeout: 1500 });
+      } else {
+        timeoutId = window.setTimeout(start, 450);
+      }
+    } else {
+      start();
+    }
 
     return () => {
-      ro.disconnect();
-      cancelAnimationFrame(s.raf);
-      if (s.fixScrollRaf) cancelAnimationFrame(s.fixScrollRaf);
-
-      const { gl } = s;
-      if (gl) {
-        gl.getExtension("WEBGL_lose_context")?.loseContext();
-      }
+      cancelled = true;
+      const w = window as unknown as { cancelIdleCallback?: (id: number) => void };
+      if (idleId !== undefined && typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      cleanup?.();
     };
   }, [imageSrc, shaders]);
 
@@ -1057,6 +1082,9 @@ const applyDelta = (dy: number) => {
   const leftPad = `calc(${edgePad} + env(safe-area-inset-left, 0px))`;
   const rightPad = `calc(${edgePad} + env(safe-area-inset-right, 0px))`;
 
+  const posterBoxW = `min(${posterWidth}px, 88vw)`;
+  const posterBoxH = `min(${Math.max(1, Math.round(posterHeight * 0.867))}px, 40vh)`;
+
   return (
     <section
       ref={containerRef}
@@ -1083,30 +1111,33 @@ const applyDelta = (dy: number) => {
         }}
       >
         {/* ✅ DOM poster for LCP (canvas often leads to NO_LCP) */}
-        <img
-          src={imageSrc}
-          alt={posterAlt}
-          width={posterWidth}
-          height={posterHeight}
-          loading="eager"
-          decoding="async"
-          fetchPriority="high"
+        <div
           style={{
             position: "absolute",
             inset: 0,
             margin: "auto",
-            maxWidth: "min(1200px, 88vw)",
-            maxHeight: "min(520px, 40vh)",
-            width: "auto",
-            height: "auto",
-            objectFit: "contain",
-            opacity: showPoster ? 1 : 0,
-            transition: "opacity 420ms ease",
+            width: posterBoxW,
+            height: posterBoxH,
             zIndex: 2,
             pointerEvents: "none",
-            filter: "contrast(1.02) saturate(1.02)",
           }}
-        />
+        >
+          <Image
+            src={imageSrc}
+            alt={posterAlt}
+            fill
+            priority
+            unoptimized
+            fetchPriority="high"
+            sizes="(max-width: 768px) 88vw, 1200px"
+            style={{
+              objectFit: "contain",
+              opacity: showPoster ? 1 : 0,
+              transition: "opacity 420ms ease",
+              filter: "contrast(1.02) saturate(1.02)",
+            }}
+          />
+        </div>
 
         {/* Caption and Contact button */}
         <div

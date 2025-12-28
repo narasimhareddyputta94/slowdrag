@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import useIsMobile from "@/components/perf/useIsMobile";
+import useNearViewport from "@/components/perf/useNearViewport";
 
 type FilmItem = {
   title: string;
@@ -16,7 +19,7 @@ function CenterPlayButton({ onClick }: { onClick: () => void }) {
       aria-label="Play video"
       className="group relative grid size-16 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
     >
-      <img
+      <Image
         src="/images/play2.png"
         alt=""
         width={64}
@@ -93,6 +96,11 @@ function MiniIconButton({
 export default function FilmsShowcase() {
   const tealColor = "#6fe7d3";
 
+  const rootRef = useRef<HTMLElement | null>(null);
+  const isMobile = useIsMobile(768);
+  const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "600px 0px" });
+  const canLoadVideo = !isMobile || near;
+
   const films: FilmItem[] = useMemo(() => {
     const videoFiles = [
       "Slowdrag 1_subs.mp4",
@@ -104,6 +112,7 @@ export default function FilmsShowcase() {
     return videoFiles.map((name) => ({
       title: name.replace(/\.[^./]+$/, ""),
       src: `/website_videos/${encodeURIComponent(name)}`,
+      poster: "/images/titleimage.png",
     }));
   }, []);
 
@@ -126,6 +135,7 @@ export default function FilmsShowcase() {
 
   // When activeIndex changes, force reload + play from start
   useEffect(() => {
+    if (!canLoadVideo) return;
     const v = videoRef.current;
     if (!v) return;
 
@@ -138,10 +148,11 @@ export default function FilmsShowcase() {
     v.load();
     const p = v.play();
     if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-  }, [activeIndex, muted]);
+  }, [activeIndex, muted, canLoadVideo]);
 
   // Keep DOM video element in sync with mute state
   useEffect(() => {
+    if (!canLoadVideo) return;
     const v = videoRef.current;
     if (!v) return;
     v.muted = muted;
@@ -150,7 +161,15 @@ export default function FilmsShowcase() {
       const p = v.play();
       if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
     }
-  }, [muted]);
+  }, [muted, canLoadVideo]);
+
+  // Mobile-only: pause when offscreen to reduce CPU/battery.
+  useEffect(() => {
+    if (!isMobile) return;
+    const v = videoRef.current;
+    if (!v) return;
+    if (!near) v.pause();
+  }, [isMobile, near]);
 
   const requestIndex = (nextIndex: number) => {
     if (nextIndex === activeIndex) return;
@@ -244,7 +263,10 @@ export default function FilmsShowcase() {
   `;
 
   return (
-    <section className="relative w-full min-h-screen text-white overflow-hidden flex items-center justify-center font-sans">
+    <section
+      ref={rootRef as unknown as React.RefObject<HTMLElement>}
+      className="relative w-full min-h-screen text-white overflow-hidden flex items-center justify-center font-sans"
+    >
       <div className="absolute inset-0 bg-gradient-to-b from-black via-neutral-950 to-black" />
       <div
         className="absolute inset-0 opacity-60"
@@ -324,12 +346,12 @@ export default function FilmsShowcase() {
                 {active?.src ? (
                   <video
                     ref={videoRef}
-                    src={active.src}
+                    src={canLoadVideo ? active.src : undefined}
                     poster={active.poster}
                     muted={muted}
                     playsInline
                     autoPlay
-                    preload="metadata"
+                    preload={canLoadVideo ? "metadata" : "none"}
                     onEnded={next}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
@@ -480,7 +502,7 @@ export default function FilmsShowcase() {
             style={{ left: "-60px" }}
             aria-label="Previous"
           >
-            <img
+            <Image
               src="/images/cursor-new.png"
               alt="Previous"
               width={190}
@@ -498,7 +520,7 @@ export default function FilmsShowcase() {
             style={{ right: "-60px" }}
             aria-label="Next"
           >
-            <img
+            <Image
               src="/images/cursor-new.png"
               alt="Next"
               width={190}

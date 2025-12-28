@@ -1,10 +1,14 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import useIsMobile from "@/components/perf/useIsMobile";
+import useNearViewport from "@/components/perf/useNearViewport";
 
 type DesignItem = {
   title: string;
   src: string;
+  poster?: string;
 };
 
 type Size = { width: number; height: number };
@@ -18,7 +22,7 @@ function CenterPlayButton({ onClick }: { onClick: () => void }) {
       className="group relative grid size-20 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
       data-player-control
     >
-      <img
+      <Image
         src="/images/play2.png"
         alt=""
         width={64}
@@ -78,9 +82,14 @@ function clamp(value: number, min: number, max: number) {
 export default function DesignsShowcase() {
   const tealColor = "#6fe7d3";
 
+  const rootRef = useRef<HTMLElement | null>(null);
+  const isSmallScreen = useIsMobile(768);
+  const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "600px 0px" });
+  const canLoadVideo = !isSmallScreen || near;
+
   const designs: DesignItem[] = useMemo(
     () => [
-      { title: "brandbook draft", src: "/mobile_images/brandbook draft.mp4" }
+      { title: "brandbook draft", src: "/mobile_images/brandbook draft.mp4", poster: "/images/titleimage.png" }
     ],
     []
   );
@@ -143,6 +152,7 @@ export default function DesignsShowcase() {
 
   // Keep DOM video element in sync with mute state
   useEffect(() => {
+    if (!canLoadVideo) return;
     const v = videoRef.current;
     if (!v) return;
     v.muted = muted;
@@ -152,10 +162,11 @@ export default function DesignsShowcase() {
         p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
       }
     }
-  }, [muted]);
+  }, [muted, canLoadVideo]);
 
   // Reload + play when media changes
   useEffect(() => {
+    if (!canLoadVideo) return;
     const v = videoRef.current;
     if (!v) return;
     v.muted = muted;
@@ -167,7 +178,14 @@ export default function DesignsShowcase() {
     if (p) {
       p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
     }
-  }, [firstDesign?.src, muted]);
+  }, [firstDesign?.src, muted, canLoadVideo]);
+
+  useEffect(() => {
+    if (!isSmallScreen) return;
+    const v = videoRef.current;
+    if (!v) return;
+    if (!near) v.pause();
+  }, [isSmallScreen, near]);
 
   const toggleMute = () => setMuted((m) => !m);
 
@@ -250,7 +268,10 @@ export default function DesignsShowcase() {
   `;
 
   return (
-    <section className="relative w-full min-h-screen bg-black text-white overflow-hidden flex items-center justify-center font-sans">
+    <section
+      ref={rootRef as unknown as React.RefObject<HTMLElement>}
+      className="relative w-full min-h-screen bg-black text-white overflow-hidden flex items-center justify-center font-sans"
+    >
       <div className="relative w-[96%] md:w-[94%] lg:w-[90%] xl:w-[86%] max-w-[1500px] flex items-center justify-center">
         <div
           className="relative w-full aspect-[2.05/1] md:aspect-[2.0/1] isolation-isolate"
@@ -349,13 +370,14 @@ export default function DesignsShowcase() {
                         >
                           <video
                             ref={videoRef}
-                            src={encodeURI(firstDesign.src)}
+                            src={canLoadVideo ? encodeURI(firstDesign.src) : undefined}
                             aria-label={firstDesign.title}
+                            poster={firstDesign.poster}
                             muted={muted}
                             autoPlay
                             loop
                             playsInline
-                            preload="metadata"
+                            preload={canLoadVideo ? "metadata" : "none"}
                             onPlay={() => setIsPlaying(true)}
                             onPause={() => setIsPlaying(false)}
                             onCanPlay={() => {
@@ -447,7 +469,7 @@ export default function DesignsShowcase() {
                   <path d="M17 5v14" />
                 </svg>
               ) : (
-                <img src="/images/play2.png" alt="" width={64} height={64} className="h-6 w-6 object-contain" />
+                <Image src="/images/play2.png" alt="" width={64} height={64} className="h-6 w-6 object-contain" />
               )}
             </ControlButton>
 
@@ -545,7 +567,7 @@ export default function DesignsShowcase() {
             "
             aria-label="Previous"
           >
-            <img
+            <Image
               src="/images/cursor-new.png"
               alt="Previous"
               width={190}
@@ -568,7 +590,7 @@ export default function DesignsShowcase() {
             "
             aria-label="Next"
           >
-            <img
+            <Image
               src="/images/cursor-new.png"
               alt="Next"
               width={190}

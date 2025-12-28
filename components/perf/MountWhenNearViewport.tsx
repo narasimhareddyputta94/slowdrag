@@ -18,6 +18,8 @@ export default function MountWhenNearViewport({
   threshold = 0.01,
 }: MountWhenNearViewportProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  // Important: keep initial render identical between server + client to avoid hydration mismatch.
+  // We always start with the placeholder, then mount in an effect.
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -29,10 +31,7 @@ export default function MountWhenNearViewport({
     }
 
     const el = hostRef.current;
-    if (!el) {
-      setMounted(true);
-      return;
-    }
+    if (!el) return;
 
     const io = new IntersectionObserver(
       (entries) => {

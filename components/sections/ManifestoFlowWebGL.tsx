@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
+import useIsMobile from "@/components/perf/useIsMobile";
 
 type ManifestoFlowWebGLProps = {
   /** Same color used by the hero melt animation */
@@ -25,39 +26,14 @@ export default function ManifestoFlowWebGL({
   brandColor = "#c6376c",
   armed = false,
 }: ManifestoFlowWebGLProps) {
-  const [started, setStarted] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    if (armed) setStarted(true);
-  }, [armed]);
+  const isMobile = useIsMobile(768);
 
   const prefersReducedMotion = useMemo(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia?.("(max-width: 768px)");
-    if (!mq) return;
-
-    const update = () => setIsMobile(mq.matches);
-    update();
-
-    if (typeof mq.addEventListener === "function") {
-      mq.addEventListener("change", update);
-      return () => mq.removeEventListener("change", update);
-    }
-
-    // Safari fallback
-    // eslint-disable-next-line deprecation/deprecation
-    mq.addListener(update);
-    // eslint-disable-next-line deprecation/deprecation
-    return () => mq.removeListener(update);
-  }, []);
-
-  const play = started || prefersReducedMotion;
+  const play = armed || prefersReducedMotion;
 
   // Top->bottom line reveal in ~3s total.
   const staggerSeconds = 0.3;
