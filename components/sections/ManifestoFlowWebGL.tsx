@@ -238,6 +238,12 @@ export default function ManifestoFlowWebGL({
   const didInitRef = useRef(false);
   const inViewRef = useRef(false);
 
+  // Mask URL management (avoid base64 strings; revoke object URLs)
+  const maskUrlRef = useRef<string | null>(null);
+  const maskGenRef = useRef(0);
+  const lastMaskSizeRef = useRef<{ w: number; h: number } | null>(null);
+  const maskDebounceRef = useRef<number | null>(null);
+
   // Reveal state (smoothed)
   const revealTargetRef = useRef(0);
   const revealPRef = useRef(0);
@@ -296,6 +302,11 @@ export default function ManifestoFlowWebGL({
       (CSS.supports("mask-image", 'url("data:image/png;base64,iVBORw0KGgo=")') ||
         CSS.supports("-webkit-mask-image", 'url("data:image/png;base64,iVBORw0KGgo=")'));
 
+    const isSmallScreen =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(max-width: 768px)").matches;
+
     const gl = canvas.getContext("webgl", {
       alpha: true,
       premultipliedAlpha: false,
@@ -303,6 +314,7 @@ export default function ManifestoFlowWebGL({
       depth: false,
       stencil: false,
       preserveDrawingBuffer: false,
+      powerPreference: isSmallScreen ? "low-power" : "high-performance",
     });
     if (!supportsMask || !gl) {
       setUseFallback(true);
@@ -428,13 +440,45 @@ export default function ManifestoFlowWebGL({
     const maskCtx = maskCanvas.getContext("2d");
     if (!maskCtx) return;
 
+    const generateMaskUrlAsync = (w: number, h: number) => {
+      maskGenRef.current += 1;
+      const gen = maskGenRef.current;
+
+      maskCanvas.toBlob(
+        (blob) => {
+          if (!blob) return;
+          // Only apply if this is the latest generation
+          if (gen !== maskGenRef.current) {
+            return;
+          }
+
+          const url = URL.createObjectURL(blob);
+
+          // Revoke previous URL to avoid leaks
+          if (maskUrlRef.current) {
+            URL.revokeObjectURL(maskUrlRef.current);
+          }
+          maskUrlRef.current = url;
+          setTextMaskUrl(url);
+        },
+        "image/png"
+      );
+    };
+
     const resizeAndRedrawMask = () => {
-      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const dpr = isSmallScreen ? 1 : Math.max(1, Math.min(2, window.devicePixelRatio || 1));
       const rect = section.getBoundingClientRect();
       const wCss = Math.max(1, rect.width);
       const hCss = Math.max(1, rect.height);
       const w = Math.floor(wCss * dpr);
       const h = Math.floor(hCss * dpr);
+
+      // Skip redundant work (esp. important on mobile where toBlob is still non-trivial)
+      const last = lastMaskSizeRef.current;
+      if (last && last.w === w && last.h === h) {
+        return;
+      }
+      lastMaskSizeRef.current = { w, h };
 
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
@@ -496,13 +540,22 @@ export default function ManifestoFlowWebGL({
         drawTrackedText(maskCtx, line, x, y, tracking);
       }
 
-      setTextMaskUrl(maskCanvas.toDataURL("image/png"));
+      // Async: avoids main-thread blocking + huge base64 strings
+      generateMaskUrlAsync(w, h);
       maskReadyRef.current = true;
     };
 
-    const ro = new ResizeObserver(() => {
+    const scheduleMaskRebuild = () => {
       if (!inViewRef.current) return;
-      requestAnimationFrame(resizeAndRedrawMask);
+      if (maskDebounceRef.current) window.clearTimeout(maskDebounceRef.current);
+      maskDebounceRef.current = window.setTimeout(() => {
+        maskDebounceRef.current = null;
+        requestAnimationFrame(resizeAndRedrawMask);
+      }, 200);
+    };
+
+    const ro = new ResizeObserver(() => {
+      scheduleMaskRebuild();
     });
     ro.observe(section);
 
@@ -514,7 +567,7 @@ export default function ManifestoFlowWebGL({
       t0Ref.current = performance.now();
       lastFrameMsRef.current = 0;
 
-      resizeAndRedrawMask();
+      scheduleMaskRebuild();
       rafRef.current = requestAnimationFrame(render);
     };
 
@@ -549,6 +602,16 @@ export default function ManifestoFlowWebGL({
 
     const render = () => {
       if (!inViewRef.current) return;
+
+      // Cap FPS on mobile to reduce main-thread + GPU pressure
+      if (isSmallScreen) {
+        const nowMs = performance.now();
+        const last = lastFrameMsRef.current;
+        if (last && nowMs - last < 33) {
+          rafRef.current = requestAnimationFrame(render);
+          return;
+        }
+      }
 
       const now = performance.now();
       const base = t0Ref.current || now;
@@ -644,6 +707,14 @@ export default function ManifestoFlowWebGL({
       ro.disconnect();
       document.removeEventListener("visibilitychange", onVis);
       stop();
+      if (maskDebounceRef.current) {
+        window.clearTimeout(maskDebounceRef.current);
+        maskDebounceRef.current = null;
+      }
+      if (maskUrlRef.current) {
+        URL.revokeObjectURL(maskUrlRef.current);
+        maskUrlRef.current = null;
+      }
       gl.deleteBuffer(tri);
       gl.deleteProgram(prog);
     };

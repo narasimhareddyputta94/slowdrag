@@ -528,6 +528,7 @@ export default function HeroMeltWebGL({
     raf: 0,
     t0: 0,
     lastFrameMs: 0,
+    lastDrawMs: 0,
     seed: 0,
     loaded: false,
     imgW: 1,
@@ -584,6 +585,17 @@ export default function HeroMeltWebGL({
       }
 
       const now = performance.now();
+
+      // Cap FPS on small screens to reduce long tasks + GPU pressure
+      const small = window.matchMedia?.("(max-width: 768px)")?.matches ?? false;
+      if (small) {
+        if (!s.lastDrawMs) s.lastDrawMs = now;
+        if (now - s.lastDrawMs < 33) {
+          if (loopRef.current && s.inView && s.pageVisible) s.raf = requestAnimationFrame(loopRef.current);
+          return;
+        }
+        s.lastDrawMs = now;
+      }
       if (!s.lastFrameMs) s.lastFrameMs = now;
       const dt = Math.max(0, Math.min(0.06, (now - s.lastFrameMs) * 0.001));
       s.lastFrameMs = now;
@@ -978,11 +990,13 @@ const applyDelta = (dy: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const isSmallScreen = window.matchMedia?.("(max-width: 768px)")?.matches ?? false;
+
     const gl = canvas.getContext("webgl", {
       alpha: false,
       premultipliedAlpha: true,
       antialias: false,
-      powerPreference: "high-performance",
+      powerPreference: isSmallScreen ? "low-power" : "high-performance",
       failIfMajorPerformanceCaveat: false,
     });
 
@@ -1102,7 +1116,7 @@ const applyDelta = (dy: number) => {
         s.cover = 0;
       }
 
-      const dprCap = isSmallScreen ? 1.5 : 2;
+      const dprCap = isSmallScreen ? 1 : 2;
       const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
 
       if (Math.abs(rect.width - s.lastLayoutW) < 1 && Math.abs(rect.height - s.lastLayoutH) < 1) return;
