@@ -14,12 +14,12 @@ function CenterPlayButton({ onClick }: { onClick: () => void }) {
       type="button"
       onClick={onClick}
       aria-label="Play video"
-      className="group relative grid size-20 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
+      className="group relative grid size-16 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
     >
       <img
         src="/images/play2.png"
         alt=""
-        className="relative z-10 h-12 w-12 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
+        className="relative z-10 h-10 w-10 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
       />
     </button>
   );
@@ -44,7 +44,8 @@ function ControlButton({
       aria-pressed={pressed}
       className="group relative grid size-12 place-items-center rounded-full bg-black/35 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/45 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
       style={{
-        boxShadow: "0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)",
+        boxShadow:
+          "0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)",
       }}
     >
       <span
@@ -66,26 +67,43 @@ function ControlButton({
   );
 }
 
+function MiniIconButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="grid size-10 place-items-center rounded-full bg-white/5 ring-1 ring-white/10 backdrop-blur-md active:scale-[0.98] transition"
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function FilmsShowcase() {
-  const brandColor = "#c6376c";
   const tealColor = "#6fe7d3";
 
-  const films: FilmItem[] = useMemo(
-    () => {
-      const videoFiles = [
-        "Slowdrag 1_subs.mov",
-        "Slowdrag 2_subs.mov",
-        "Slowdrag 3_subs.mov",
-        "Showreel.mov",
-      ].sort((a, b) => a.localeCompare(b));
+  const films: FilmItem[] = useMemo(() => {
+    const videoFiles = [
+      "Slowdrag 1_subs.mp4",
+      "Slowdrag 2_subs.mp4",
+      "Slowdrag 3_subs.mp4",
+      "Showreel.mp4",
+    ].sort((a, b) => a.localeCompare(b));
 
-      return videoFiles.map((name) => ({
-        title: name.replace(/\.[^./]+$/, ""),
-        src: `/website_videos/${encodeURIComponent(name)}`,
-      }));
-    },
-    []
-  );
+    return videoFiles.map((name) => ({
+      title: name.replace(/\.[^./]+$/, ""),
+      src: `/website_videos/${encodeURIComponent(name)}`,
+    }));
+  }, []);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [phase, setPhase] = useState<"idle" | "out" | "in">("idle");
@@ -111,16 +129,13 @@ export default function FilmsShowcase() {
 
     v.muted = muted;
 
-    // reset + reload
     try {
       v.currentTime = 0;
     } catch {}
-    v.load();
 
+    v.load();
     const p = v.play();
-    if (p) {
-      p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-    }
+    if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
   }, [activeIndex, muted]);
 
   // Keep DOM video element in sync with mute state
@@ -128,30 +143,24 @@ export default function FilmsShowcase() {
     const v = videoRef.current;
     if (!v) return;
     v.muted = muted;
+
     if (!muted) {
       const p = v.play();
-      if (p) {
-        p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-      }
+      if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
     }
   }, [muted]);
 
   const requestIndex = (nextIndex: number) => {
     if (nextIndex === activeIndex) return;
 
-    // If user clicks fast, we’ll just restart the transition cleanly
     clearAllTimeouts();
-
     setPhase("out");
 
     const t1 = window.setTimeout(() => {
       setActiveIndex(nextIndex);
       setPhase("in");
 
-      const t2 = window.setTimeout(() => {
-        setPhase("idle");
-      }, 280);
-
+      const t2 = window.setTimeout(() => setPhase("idle"), 280);
       timeoutsRef.current.push(t2);
     }, 280);
 
@@ -166,31 +175,35 @@ export default function FilmsShowcase() {
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
+
     if (v.paused) {
       const p = v.play();
-      if (p) {
-        p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-      }
+      if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
       return;
     }
+
     v.pause();
     setIsPlaying(false);
   };
 
-  const pauseVideo = () => {
+  const active = films[activeIndex];
+  const videoOpacity = phase === "out" ? 0 : 1;
+
+  // =========================
+  // ✅ DESKTOP/TABLET LAYOUT
+  // =========================
+
+  const handlePlayerPointerDown = (e: React.PointerEvent) => {
+    if (!isPlaying) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest?.("[data-player-control]")) return;
+
     const v = videoRef.current;
     if (!v) return;
     if (!v.paused) {
       v.pause();
       setIsPlaying(false);
     }
-  };
-
-  const handlePlayerPointerDown = (e: React.PointerEvent) => {
-    if (!isPlaying) return;
-    const target = e.target as HTMLElement | null;
-    if (target?.closest?.("[data-player-control]")) return;
-    pauseVideo();
   };
 
   const shapePath = `
@@ -228,9 +241,6 @@ export default function FilmsShowcase() {
     Z
   `;
 
-  const active = films[activeIndex];
-  const videoOpacity = phase === "out" ? 0 : 1;
-
   return (
     <section className="relative w-full min-h-screen text-white overflow-hidden flex items-center justify-center font-sans">
       <div className="absolute inset-0 bg-gradient-to-b from-black via-neutral-950 to-black" />
@@ -257,7 +267,14 @@ export default function FilmsShowcase() {
                 <path d={shapePath} />
               </clipPath>
 
-              <radialGradient id="grad1" cx="30%" cy="30%" r="50%" fx="30%" fy="30%">
+              <radialGradient
+                id="grad1"
+                cx="30%"
+                cy="30%"
+                r="50%"
+                fx="30%"
+                fy="30%"
+              >
                 <stop offset="0%" stopColor="rgba(111,231,211,0.35)" />
                 <stop offset="100%" stopColor="transparent" />
               </radialGradient>
@@ -271,7 +288,12 @@ export default function FilmsShowcase() {
               </radialGradient>
 
               <filter id="noise">
-                <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch" />
+                <feTurbulence
+                  type="fractalNoise"
+                  baseFrequency="0.8"
+                  numOctaves="3"
+                  stitchTiles="stitch"
+                />
                 <feColorMatrix type="saturate" values="0" />
                 <feComponentTransfer>
                   <feFuncA type="linear" slope="0.1" />
@@ -281,7 +303,13 @@ export default function FilmsShowcase() {
 
             <path d={shapePath} fill="#0a0a0a" />
 
-            <foreignObject x="0" y="0" width="1000" height="600" clipPath="url(#blob-clip)">
+            <foreignObject
+              x="0"
+              y="0"
+              width="1000"
+              height="600"
+              clipPath="url(#blob-clip)"
+            >
               <div
                 style={{
                   width: "100%",
@@ -339,10 +367,15 @@ export default function FilmsShowcase() {
               </div>
             </foreignObject>
 
-            <path d={shapePath} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
+            <path
+              d={shapePath}
+              fill="none"
+              stroke="rgba(255,255,255,0.15)"
+              strokeWidth="1.5"
+            />
           </svg>
 
-          {/* Center overlay play button (kept outside SVG so blend layers don't tint it) */}
+          {/* Center overlay play button */}
           {!isPlaying ? (
             <div
               data-player-control
@@ -375,7 +408,6 @@ export default function FilmsShowcase() {
                   border: `3px solid ${tealColor}`,
                   left: "-130px",
                   bottom: "-20px",
-                  
                 }}
               >
                 FILMS
@@ -383,13 +415,17 @@ export default function FilmsShowcase() {
             </div>
           </div>
 
-          {/* Audio Control (glossy, bottom-right) */}
+          {/* Audio Control (bottom-right) */}
           <div
             data-player-control
             className="absolute z-40 flex items-center"
             style={{ right: "24px", bottom: "80px" }}
           >
-            <ControlButton onClick={toggleMute} pressed={!muted} label={muted ? "Unmute video" : "Mute video"}>
+            <ControlButton
+              onClick={toggleMute}
+              pressed={!muted}
+              label={muted ? "Unmute video" : "Mute video"}
+            >
               <svg
                 width="22"
                 height="22"
@@ -402,10 +438,14 @@ export default function FilmsShowcase() {
                 className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
               >
                 <path d="M11 5L6 9H3v6h3l5 4V5z" />
-                {muted ? <path d="M22 9l-7 7" /> : <>
-                  <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-                  <path d="M18.8 6.2a8.5 8.5 0 0 1 0 11.6" />
-                </>}
+                {muted ? (
+                  <path d="M22 9l-7 7" />
+                ) : (
+                  <>
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                    <path d="M18.8 6.2a8.5 8.5 0 0 1 0 11.6" />
+                  </>
+                )}
               </svg>
             </ControlButton>
           </div>
@@ -414,17 +454,16 @@ export default function FilmsShowcase() {
           <div data-player-control className="absolute bottom-[6%] right-[3%] z-30">
             <button
               type="button"
-                className="relative w-[450px] h-[48px] px-8 py-3 rounded-full text-base font-bold tracking-[0.25em] text-white transition-all flex items-center justify-end"
-                style={{
-                  background: "rgba(0, 0, 0, 1)",
-                  color: "#fff",
-                  backdropFilter: "blur(12px)",
-                  WebkitBackdropFilter: "blur(12px)",
-                  border: `3px solid ${tealColor}`,
-                  right: "-110px",
-                  bottom: "-40px",
-                  
-                }}
+              className="relative w-[450px] h-[48px] px-8 py-3 rounded-full text-base font-bold tracking-[0.25em] text-white transition-all flex items-center justify-end"
+              style={{
+                background: "rgba(0, 0, 0, 1)",
+                color: "#fff",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                border: `3px solid ${tealColor}`,
+                right: "-110px",
+                bottom: "-40px",
+              }}
             >
               MAKE US A PART OF YOUR STORY TELLING
             </button>
@@ -467,7 +506,7 @@ export default function FilmsShowcase() {
           <div
             data-player-control
             className="absolute bottom-[2%] left-[1%] z-30 flex flex-col items-start w-[220px] rounded-xl px-3 py-2"
-            style={{ left: "-80px", bottom:"-15px"}}
+            style={{ left: "-80px", bottom: "-15px" }}
           >
             <div
               className="text-[24px] leading-[1.05] font-normal tracking-[0.02em] text-white"

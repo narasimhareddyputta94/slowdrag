@@ -2,11 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "@/components/nav/Navbar";
-import FilmsShowcase from "@/components/sections/FilmsShowcase";
-import MobileFilmsShowcase from "@/components/sections/MobileFilmsShowcase";
+import FilmsShowcaseResponsive from "@/components/sections/FilmsShowcaseResponsive";
 import Manifesto2 from "@/components/sections/Manifesto2";
 import DesignsShowcase from "@/components/sections/DesignsShowcase";
-import MobileDesignsShowcase from "@/components/sections/MobileDesignsShowcase";
 import RotatedVideoSection from "@/components/sections/RotatedVideoSection";
 import Footer from "@/components/footer/Footer";
 import HeroMeltWebGL from "@/components/hero/HeroMeltWebGL";
@@ -15,7 +13,6 @@ import ManifestoFlowWebGL from "@/components/sections/ManifestoFlowWebGL";
 export default function Home() {
   const [showNav, setShowNav] = useState(false);
   const [heroInView, setHeroInView] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
   const heroWrapRef = useRef<HTMLDivElement | null>(null);
 
   // ✅ Armed exactly when Hero reports “melt touched bottom / finished”
@@ -23,13 +20,6 @@ export default function Home() {
   const armedOnceRef = useRef(false);
 
   const brandColor = "#c6376c";
-
-  useEffect(() => {
-    const checkIsMobile = () => setIsMobile(window.innerWidth < 768);
-    checkIsMobile();
-    window.addEventListener("resize", checkIsMobile);
-    return () => window.removeEventListener("resize", checkIsMobile);
-  }, []);
 
   // ✅ Hero -> Manifesto sync: one-time arm
   const handleMeltFinished = useCallback(() => {
@@ -80,7 +70,6 @@ export default function Home() {
           posterAlt="Slow Drag Studios"
           posterWidth={1200}
           posterHeight={600}
-          // ✅ hero tells us the exact moment it “touches bottom / finishes”
           onMeltFinished={handleMeltFinished}
         />
       </div>
@@ -88,9 +77,14 @@ export default function Home() {
       {/* ✅ Reveal begins only after hero melt finishes. */}
       <ManifestoFlowWebGL brandColor={brandColor} armed={manifestoArmed} />
 
-      {isMobile ? <MobileFilmsShowcase /> : <FilmsShowcase />}
+        {/* ✅ Films section switches by breakpoint */}
+        <FilmsShowcaseResponsive />
+
       <Manifesto2 />
-      {isMobile ? <MobileDesignsShowcase /> : <DesignsShowcase />}
+
+      {/* ✅ Remove MobileDesignsShowcase: single component for all */}
+      <DesignsShowcase />
+
       <RotatedVideoSection />
       <Footer />
     </main>

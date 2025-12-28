@@ -1,214 +1,463 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
 
 type FilmItem = {
   title: string;
   src: string;
-  category: string;
+  poster?: string;
 };
 
-export default function MobileFilmsShowcase() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(true);
-  const [progress, setProgress] = useState(0);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
+function CenterPlayButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Play video"
+      className="group relative grid size-16 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
+    >
+      <img
+        src="/images/play2.png"
+        alt=""
+        className="relative z-10 h-10 w-10 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
+      />
+    </button>
+  );
+}
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+function ControlButton({
+  label,
+  pressed,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={pressed}
+      className="group relative grid size-12 place-items-center rounded-full bg-black/35 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/45 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+      style={{
+        boxShadow:
+          "0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)",
+      }}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
+      />
+      <span
+        aria-hidden
+        className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80"
+      />
+      <span
+        aria-hidden
+        className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md"
+      />
+      <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.05]">
+        {children}
+      </span>
+    </button>
+  );
+}
+
+function MiniIconButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="grid size-10 place-items-center rounded-full bg-white/5 ring-1 ring-white/10 backdrop-blur-md active:scale-[0.98] transition"
+    >
+      {children}
+    </button>
+  );
+}
+
+export default function MobileFilmsShowcase() {
+  const tealColor = "#6fe7d3";
 
   const films: FilmItem[] = useMemo(() => {
-    // Keep mobile in sync with the desktop FilmsShowcase sources.
     const videoFiles = [
-      "Slowdrag 1_subs.mov",
-      "Slowdrag 2_subs.mov",
-      "Slowdrag 3_subs.mov",
-      "Showreel.mov",
+      "Slowdrag 1_subs.mp4",
+      "Slowdrag 2_subs.mp4",
+      "Slowdrag 3_subs.mp4",
+      "Showreel.mp4",
     ].sort((a, b) => a.localeCompare(b));
 
     return videoFiles.map((name) => ({
       title: name.replace(/\.[^./]+$/, ""),
       src: `/website_videos/${encodeURIComponent(name)}`,
-      category: "FILM",
     }));
   }, []);
 
-  const handleNext = () => setActiveIndex((prev) => (prev + 1) % films.length);
-  const handlePrev = () => setActiveIndex((prev) => (prev - 1 + films.length) % films.length);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [phase, setPhase] = useState<"idle" | "out" | "in">("idle");
+  const [muted, setMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  // Keep track of timeouts so we can clear them (prevents "stuck" phase)
+  const timeoutsRef = useRef<number[]>([]);
+  const clearAllTimeouts = () => {
+    timeoutsRef.current.forEach((t) => window.clearTimeout(t));
+    timeoutsRef.current = [];
+  };
+
+  useEffect(() => {
+    return () => clearAllTimeouts();
+  }, []);
+
+  // When activeIndex changes, force reload + play from start
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const updateProgress = () => setProgress((v.currentTime / v.duration) * 100);
-    v.addEventListener("timeupdate", updateProgress);
-    return () => v.removeEventListener("timeupdate", updateProgress);
-  }, [activeIndex]);
 
-  const currentFilm = films[activeIndex];
+    v.muted = muted;
+
+    try {
+      v.currentTime = 0;
+    } catch {}
+
+    v.load();
+    const p = v.play();
+    if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+  }, [activeIndex, muted]);
+
+  // Keep DOM video element in sync with mute state
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = muted;
+
+    if (!muted) {
+      const p = v.play();
+      if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
+  }, [muted]);
+
+  const requestIndex = (nextIndex: number) => {
+    if (nextIndex === activeIndex) return;
+
+    clearAllTimeouts();
+    setPhase("out");
+
+    const t1 = window.setTimeout(() => {
+      setActiveIndex(nextIndex);
+      setPhase("in");
+
+      const t2 = window.setTimeout(() => setPhase("idle"), 280);
+      timeoutsRef.current.push(t2);
+    }, 280);
+
+    timeoutsRef.current.push(t1);
+  };
+
+  const next = () => requestIndex((activeIndex + 1) % films.length);
+  const prev = () => requestIndex((activeIndex - 1 + films.length) % films.length);
+
+  const toggleMute = () => setMuted((m) => !m);
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    if (v.paused) {
+      const p = v.play();
+      if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      return;
+    }
+
+    v.pause();
+    setIsPlaying(false);
+  };
+
+  const active = films[activeIndex];
+  const videoOpacity = phase === "out" ? 0 : 1;
+
+  // =========================
+  // ✅ DESKTOP/TABLET LAYOUT (DUPLICATED FOR MOBILE EDITS)
+  // =========================
+
+  const handlePlayerPointerDown = (e: React.PointerEvent) => {
+    if (!isPlaying) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest?.("[data-player-control]")) return;
+
+    const v = videoRef.current;
+    if (!v) return;
+    if (!v.paused) {
+      v.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const shapePath = `
+    M 120,120
+    A 26 26 0 0 0 145,95
+    A 26 26 0 0 1 165,70
+    A 26 26 0 0 0 190,35
+    A 26 26 0 0 1 210,0
+    L 780,0
+    L 804,0
+    A 26 26 0 0 1 830,26
+    L 830,40
+
+    A 26 26 0 0 0 855,66
+    L 900,65
+    L 976,65
+    A 26 26 0 0 1 1000,91
+    L 1000,530
+    A 26 26 0 0 1 974,556
+    L 930,555
+    L 700,555
+    A 28 28 0 0 0 674,600
+    L 600,600
+    L 200,600
+    A 26 26 0 0 1 160,576
+    A 26 26 0 0 0 120,552
+    A 26 26 0 0 1 80,528
+    A 26 26 0 0 0 40,504
+    A 26 26 0 0 1 0,480
+    L 0,430
+    L 0,170
+    L 0,146
+    A 26 26 0 0 1 26,120
+    L 120,120
+    Z
+  `;
 
   return (
-    <section className="relative w-full bg-[#020202] text-white flex flex-col overflow-hidden select-none font-offbit">
-      {/* Subtle premium backdrop */}
+    <section className="relative w-full min-h-[100svh] text-white overflow-hidden font-sans bg-[#020202]">
+      <div className="absolute inset-0 bg-gradient-to-b from-black via-neutral-950 to-black" />
       <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-60"
+        className="absolute inset-0 opacity-60"
         style={{
           background:
-            "radial-gradient(1000px 600px at 20% 15%, rgba(20,144,125,0.18), transparent 65%), radial-gradient(900px 520px at 80% 70%, rgba(255,255,255,0.06), transparent 70%)",
+            "radial-gradient(900px 520px at 55% 45%, rgba(255,255,255,0.06), transparent 60%)",
         }}
       />
-      
-      {/* --- 10% HEADER: MUSEUM STYLING --- */}
-      <header className="flex flex-col items-center justify-center z-50 px-6 pt-10 pb-6 relative">
-        <motion.div 
-          initial={{ opacity: 0, letterSpacing: "1em" }}
-          animate={{ opacity: 1, letterSpacing: "0.5em" }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
-          className="flex flex-col items-center"
-        >
-          <h1 className="text-3xl font-black uppercase italic tracking-[0.5em] text-white/90">
-            Films
-          </h1>
-          <motion.div 
-            initial={{ width: 0 }}
-            animate={{ width: "40px" }}
-            transition={{ delay: 0.8, duration: 1 }}
-            className="h-[1px] bg-teal-500 mt-3"
-          />
-        </motion.div>
-      </header>
 
-      {/* --- FULLSCREEN PLAYER (16:9) --- */}
-      <main 
-        className="relative h-[100svh] w-full overflow-hidden flex items-center justify-center"
-        onTouchStart={(e) => setTouchStart(e.targetTouches[0].clientX)}
-        onTouchEnd={(e) => {
-          if (!touchStart) return;
-          const dist = touchStart - e.changedTouches[0].clientX;
-          if (dist > 50) handleNext();
-          else if (dist < -50) handlePrev();
-          else setIsPlaying(!isPlaying);
-          setTouchStart(null);
-        }}
-      >
-        <div className="relative h-full aspect-video overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeIndex}
-              initial={{ opacity: 0, filter: "brightness(0.2) contrast(1.2)" }}
-              animate={{ opacity: 1, filter: "brightness(1) contrast(1)" }}
-              exit={{ opacity: 0, scale: 1.05, filter: "blur(20px)" }}
-              transition={{ duration: 0.8, ease: [0.19, 1, 0.22, 1] }}
-              className="relative w-full h-full"
+      <div className="relative z-10 mx-auto w-full max-w-[560px] px-5">
+        <div className="min-h-[100svh] flex flex-col pt-2 pb-6">
+          {/* Top 20%: FILMS */}
+          <div className="h-[20svh] min-h-[120px] flex flex-col items-center justify-center text-center">
+            <div
+              className="text-[42px] font-black tracking-[0.40em] uppercase text-white/90"
+              style={{ fontFamily: "var(--font-offbit-101)" }}
             >
-              <video
-                ref={videoRef}
-                src={currentFilm.src}
-                muted={isMuted}
-                autoPlay
-                playsInline
-                onEnded={handleNext}
-                className="w-full h-full object-cover scale-[1.02] pointer-events-none"
-              />
-              {/* Edge softening gradients */}
-              <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#020202] to-transparent z-10" />
-              <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#020202] to-transparent z-10" />
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* Center Play Icon (Only on Pause) */}
-        <AnimatePresence>
-          {!isPlaying && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.5 }}
-              className="absolute inset-0 flex items-center justify-center z-20"
-            >
-              <div className="size-20 rounded-full bg-white/5 backdrop-blur-2xl border border-white/10 flex items-center justify-center">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="white" className="ml-1"><path d="M8 5v14l11-7z"/></svg>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
-
-      {/* --- CONTENT BELOW PLAYER --- */}
-      <footer className="w-full px-8 pt-10 pb-10 z-50 bg-[#020202]">
-        
-        <div className="flex flex-col gap-7">
-          {/* Narrative Description with Animated Weights */}
-          <div className="flex flex-col items-center">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeIndex}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                className="text-center"
-              >
-                
-                <p className="text-[16px] leading-snug text-white/75 max-w-[300px] mx-auto tracking-[0.08em] uppercase">
-                  We work across <span className="text-white font-bold italic underline decoration-teal-500/30 underline-offset-4">narrative landscapes</span> to bring experimental emotion to life.
-                </p>
-              </motion.div>
-            </AnimatePresence>
+              FILMS
+            </div>
+            <div className="mt-3 h-px w-14 bg-white/15" />
           </div>
 
-          {/* INFINITY BUTTON: LIQUID SHINE EFFECT */}
-          <Link href="/contact" className="relative group block">
-            <motion.div 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.95 }}
-              className="relative h-16 w-full rounded-full bg-white text-black flex items-center justify-center overflow-hidden shadow-[0_20px_40px_rgba(255,255,255,0.12)] ring-1 ring-black/10"
-            >
-              <motion.div 
-                animate={{ x: ['-150%', '150%'] }}
-                transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-teal-400/40 to-transparent skew-x-[35deg]"
+          {/* Player (kept same size/shape) */}
+          <div className="flex-none pt-1">
+            <div className="relative w-full aspect-[5/3]" onPointerDown={handlePlayerPointerDown}>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -inset-5 rounded-[40px] blur-2xl opacity-25"
+                style={{
+                  background:
+                    "radial-gradient(55% 55% at 50% 48%, rgba(111,231,211,0.22), transparent 70%)",
+                }}
               />
-              <div className="absolute inset-0 rounded-full ring-1 ring-white/40" />
-              <span className="relative z-10 text-[12px] font-black tracking-[0.6em] uppercase">
-                Join Our Story
-              </span>
-            </motion.div>
-          </Link>
-        </div>
+              <svg
+            viewBox="0 0 1000 600"
+            className="w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] pointer-events-none"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <defs>
+              <clipPath id="blob-clip" clipPathUnits="userSpaceOnUse">
+                <path d={shapePath} />
+              </clipPath>
 
-        {/* Global Progress & Mute */}
-        <div className="flex justify-between items-center mt-10">
-          <div className="flex gap-2 items-center">
-            {films.map((_, i) => (
-              <div key={i} className="h-0.5 bg-white/10 w-6 rounded-full overflow-hidden">
-                {i === activeIndex && (
-                  <motion.div 
-                    layoutId="activeBar"
-                    className="h-full bg-teal-500"
-                    style={{ width: `${progress}%` }}
+              <radialGradient
+                id="grad1"
+                cx="30%"
+                cy="30%"
+                r="50%"
+                fx="30%"
+                fy="30%"
+              >
+                <stop offset="0%" stopColor="rgba(111,231,211,0.35)" />
+                <stop offset="100%" stopColor="transparent" />
+              </radialGradient>
+              <radialGradient id="grad2" cx="70%" cy="60%" r="60%">
+                <stop offset="0%" stopColor="rgba(198,55,108,0.55)" />
+                <stop offset="100%" stopColor="transparent" />
+              </radialGradient>
+              <radialGradient id="grad3" cx="90%" cy="90%" r="50%">
+                <stop offset="0%" stopColor="rgba(255,220,140,0.3)" />
+                <stop offset="100%" stopColor="transparent" />
+              </radialGradient>
+
+              <filter id="noise">
+                <feTurbulence
+                  type="fractalNoise"
+                  baseFrequency="0.8"
+                  numOctaves="3"
+                  stitchTiles="stitch"
+                />
+                <feColorMatrix type="saturate" values="0" />
+                <feComponentTransfer>
+                  <feFuncA type="linear" slope="0.1" />
+                </feComponentTransfer>
+              </filter>
+            </defs>
+
+            <path d={shapePath} fill="#0a0a0a" />
+
+            <foreignObject
+              x="0"
+              y="0"
+              width="1000"
+              height="600"
+              clipPath="url(#blob-clip)"
+            >
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  position: "relative",
+                  background: "#0a0a0a",
+                  overflow: "hidden",
+                }}
+              >
+                {active?.src ? (
+                  <video
+                    ref={videoRef}
+                    src={active.src}
+                    poster={active.poster}
+                    muted={muted}
+                    playsInline
+                    autoPlay
+                    preload="metadata"
+                    onEnded={next}
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onCanPlay={() => {
+                      const v = videoRef.current;
+                      if (!v) return;
+                      v.muted = muted;
+                      const p = v.play();
+                      if (p) {
+                        p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+                      }
+                    }}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      objectPosition: "center",
+                      display: "block",
+                      transform: "scale(1.34)",
+                      transformOrigin: "center",
+                      opacity: videoOpacity,
+                      transition: "opacity 280ms ease",
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      background:
+                        "radial-gradient(800px 520px at 30% 35%, rgba(111,231,211,0.20), transparent 60%), radial-gradient(900px 520px at 65% 62%, rgba(198,55,108,0.28), transparent 62%), radial-gradient(700px 420px at 88% 90%, rgba(255,220,140,0.18), transparent 60%), #0a0a0a",
+                      opacity: videoOpacity,
+                      transition: "opacity 280ms ease",
+                    }}
                   />
                 )}
-                {i < activeIndex && <div className="h-full bg-white/40 w-full" />}
               </div>
-            ))}
+            </foreignObject>
+
+            <path
+              d={shapePath}
+              fill="none"
+              stroke="rgba(255,255,255,0.15)"
+              strokeWidth="1.5"
+            />
+          </svg>
+
+          {/* Center overlay play button */}
+          {!isPlaying ? (
+            <div
+              data-player-control
+              className="absolute z-40"
+              style={{
+                left: "50%",
+                top: "48%",
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <CenterPlayButton onClick={togglePlay} />
+            </div>
+          ) : null}
+            </div>
           </div>
 
-          <button 
-            onClick={() => setIsMuted(!isMuted)}
-            className="group flex items-center gap-3 active:scale-90 transition-transform"
-          >
-            <span className="text-[10px] font-bold tracking-[0.2em] text-white/40 group-hover:text-white transition-colors uppercase">
-              {isMuted ? 'Audio Off' : 'Audio On'}
-            </span>
-            <div className={`size-2 rounded-full ${isMuted ? 'bg-white/20' : 'bg-teal-400 shadow-[0_0_10px_#2dd4bf]'}`} />
-          </button>
-        </div>
-      </footer>
+          {/* Fixed gap: 10% of viewport height */}
+          <div aria-hidden="true" className="h-[10svh]" />
 
-      {/* --- FILM GRAIN & TEXTURE OVERLAY --- */}
-      <div className="absolute inset-0 z-[100] pointer-events-none opacity-[0.05] mix-blend-overlay bg-[url('https://upload.wikimedia.org/wikipedia/commons/7/76/1k_Grain.jpg')]" />
+          {/* Bottom: text + CTA */}
+          <div className="min-h-[10svh] flex flex-col items-center text-center pt-2">
+            <div className="w-full max-w-[22rem]">
+              <div className="text-[12px] tracking-[0.22em] uppercase text-white/70">
+                We work across
+              </div>
+              <div
+                className="mt-5 text-[22px] leading-[1.08] font-normal tracking-[0.02em] text-white"
+                style={{
+                  fontFamily: "var(--font-offbit-101)",
+                  textShadow: "0 2px 4px rgba(180, 0, 0, 0.9)",
+                }}
+              >
+                <div>narrative</div>
+                <div>experimental films,</div>
+                <div>commercials & films,</div>
+                <div>documentaries</div>
+              </div>
+            </div>
+
+            {/* Gap between copy and CTA: 10% viewport height */}
+            <div aria-hidden="true" className="h-[10svh]" />
+
+            <a
+              href="/contact"
+              aria-label="Join our story"
+              className="group relative flex w-full max-w-[240px] mx-auto min-h-[34px] items-center justify-center overflow-hidden rounded-full bg-transparent text-center px-6 py-5 text-[10px] font-black tracking-[0.42em] uppercase no-underline transition active:scale-[0.99]"
+              style={{
+                color: tealColor,
+                backgroundColor: "rgba(0,0,0,0.22)",
+                boxShadow:
+                  "0 0 0 1px rgba(111,231,211,0.65), 0 18px 45px rgba(0,0,0,0.55)",
+              }}
+            >
+              <span
+                className="relative z-10 no-underline"
+                style={{ fontFamily: "var(--font-offbit-101)" }}
+              >
+                JOIN OUR STORY
+              </span>
+            </a>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
