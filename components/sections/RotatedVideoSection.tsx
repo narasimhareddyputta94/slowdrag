@@ -27,7 +27,7 @@ export default function RotatedVideoSection() {
         muted
         loop
         playsInline
-        preload="metadata"
+        preload="none"
       />
     </section>
   );

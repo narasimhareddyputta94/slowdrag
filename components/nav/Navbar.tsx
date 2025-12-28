@@ -108,7 +108,7 @@ export default function Navbar({
               alt="Logo"
               fill
               sizes="(max-width: 768px) 140px, 180px"
-              priority
+              priority={show && !useAltLogo}
               style={{
                 objectFit: "contain",
                 userSelect: "none",
@@ -124,7 +124,7 @@ export default function Navbar({
                 alt="Logo"
                 fill
                 sizes="(max-width: 768px) 140px, 180px"
-                priority
+                priority={show && useAltLogo}
                 style={{
                   objectFit: "contain",
                   userSelect: "none",

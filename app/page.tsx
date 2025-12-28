@@ -3,7 +3,7 @@ import Footer from "@/components/footer/Footer";
 import HomeClient from "@/app/HomeClient";
 import FilmsSectionClient from "./FilmsSectionClient";
 import DesignsSectionClient from "./DesignsSectionClient";
-import RotatedVideoSection from "@/components/sections/RotatedVideoSection";
+import RotatedVideoSectionClient from "./RotatedVideoSectionClient";
 
 export default function Home() {
   const brandColor = "#c6376c";
@@ -20,7 +20,7 @@ export default function Home() {
       {/* ✅ Designs section switches by breakpoint */}
       <DesignsSectionClient />
 
-      <RotatedVideoSection />
+      <RotatedVideoSectionClient />
       <Footer />
     </main>
   );
