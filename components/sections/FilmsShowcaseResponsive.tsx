@@ -1,8 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import FilmsShowcase from "./FilmsShowcase";
-import MobileFilmsShowcase from "./MobileFilmsShowcase";
+import dynamic from "next/dynamic";
+
+const FilmsShowcase = dynamic(() => import("./FilmsShowcase"), {
+  ssr: true,
+});
+const MobileFilmsShowcase = dynamic(() => import("./MobileFilmsShowcase"), {
+  ssr: true,
+});
 
 export default function FilmsShowcaseResponsive() {
   const [isMobile, setIsMobile] = useState(false);

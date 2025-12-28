@@ -1,9 +1,19 @@
-import FilmsShowcaseResponsive from "@/components/sections/FilmsShowcaseResponsive";
+import dynamic from "next/dynamic";
 import Manifesto2 from "@/components/sections/Manifesto2";
-import DesignsShowcaseResponsive from "@/components/sections/DesignsShowcaseResponsive";
-import RotatedVideoSection from "@/components/sections/RotatedVideoSection";
 import Footer from "@/components/footer/Footer";
 import HomeClient from "@/app/HomeClient";
+
+const FilmsShowcaseResponsive = dynamic(
+  () => import("@/components/sections/FilmsShowcaseResponsive"),
+  { ssr: true }
+);
+const DesignsShowcaseResponsive = dynamic(
+  () => import("@/components/sections/DesignsShowcaseResponsive"),
+  { ssr: true }
+);
+const RotatedVideoSection = dynamic(() => import("@/components/sections/RotatedVideoSection"), {
+  ssr: true,
+});
 
 export default function Home() {
   const brandColor = "#c6376c";
