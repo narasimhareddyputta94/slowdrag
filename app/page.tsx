@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "@/components/nav/Navbar";
 import FilmsShowcaseResponsive from "@/components/sections/FilmsShowcaseResponsive";
 import Manifesto2 from "@/components/sections/Manifesto2";
-import DesignsShowcase from "@/components/sections/DesignsShowcase";
+import DesignsShowcaseResponsive from "@/components/sections/DesignsShowcaseResponsive";
 import RotatedVideoSection from "@/components/sections/RotatedVideoSection";
 import Footer from "@/components/footer/Footer";
 import HeroMeltWebGL from "@/components/hero/HeroMeltWebGL";
@@ -82,8 +82,8 @@ export default function Home() {
 
       <Manifesto2 />
 
-      {/* ✅ Remove MobileDesignsShowcase: single component for all */}
-      <DesignsShowcase />
+      {/* ✅ Designs section switches by breakpoint */}
+      <DesignsShowcaseResponsive />
 
       <RotatedVideoSection />
       <Footer />
