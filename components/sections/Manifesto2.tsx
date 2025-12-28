@@ -6,6 +6,7 @@ export default function Manifesto2() {
   return (
     <section
       aria-label="Manifesto2"
+      className="manifesto2"
       style={{
         minHeight: "70vh",
         background: "transparent",
@@ -16,6 +17,7 @@ export default function Manifesto2() {
       }}
     >
       <div
+        className="manifesto2__inner"
         style={{
           maxWidth: 900,
           textAlign: "center",
@@ -37,6 +39,24 @@ export default function Manifesto2() {
           OUR CINEMA RESISTS SPEED AND HONOURS WHAT IS OFTEN UNSEEN.
         </p>
       </div>
+
+      <style jsx>{`
+        @media (max-width: 767px) {
+          .manifesto2 {
+            min-height: 60svh !important;
+            padding: 0 24px !important;
+          }
+
+          .manifesto2__inner {
+            max-width: 520px !important;
+            font-size: 20px !important;
+            line-height: 1.7 !important;
+            letter-spacing: 0.06em !important;
+            font-weight: 500 !important;
+            text-wrap: balance;
+          }
+        }
+      `}</style>
     </section>
   );
 }
