@@ -294,3 +294,27 @@ section[aria-label="Manifesto"][data-meltfill="1"] .manifesto-copy .manifesto-st
     padding: 0 10px;
   }
 }
+
+
+/* Manifesto text hooks */
+.manifesto-copy,
+.manifesto-strong {
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------- Manifesto: "holes in black" + glow stroke ---------------- */
+section[aria-label="Manifesto"][data-holes="1"] .manifesto-copy,
+section[aria-label="Manifesto"][data-holes="1"] .manifesto-copy .manifesto-strong {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+
+  /* Heavier edge so the cutout feels thick */
+  -webkit-text-stroke: calc(1.5px + 1.5px * var(--mf-glow, 0))
+    rgb(255 255 255 / calc(0.16 + 0.60 * var(--mf-glow, 0)));
+
+  /* Brand glow that ramps up as the flow reveals */
+  text-shadow:
+    0 0 calc(14px * var(--mf-glow, 0)) rgb(var(--flow-color-rgb) / 0.55),
+    0 0 calc(34px * var(--mf-glow, 0)) rgb(var(--flow-color-rgb) / 0.22);
+}

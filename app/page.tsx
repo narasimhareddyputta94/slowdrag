@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "@/components/nav/Navbar";
 import FilmsShowcase from "@/components/sections/FilmsShowcase";
 import MobileFilmsShowcase from "@/components/sections/MobileFilmsShowcase";
@@ -10,31 +10,53 @@ import MobileDesignsShowcase from "@/components/sections/MobileDesignsShowcase";
 import RotatedVideoSection from "@/components/sections/RotatedVideoSection";
 import Footer from "@/components/footer/Footer";
 import HeroMeltWebGL from "@/components/hero/HeroMeltWebGL";
-import ManifestoMeltWebGLPage from "./manifestomeltwebgl/page";
+import ManifestoFlowWebGL from "@/components/sections/ManifestoFlowWebGL";
 
 export default function Home() {
   const [showNav, setShowNav] = useState(false);
   const [heroInView, setHeroInView] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const heroWrapRef = useRef<HTMLDivElement | null>(null);
+
+  // ✅ Armed exactly when Hero reports “melt touched bottom / finished”
+  const [manifestoArmed, setManifestoArmed] = useState(false);
+  const armedOnceRef = useRef(false);
+
   const brandColor = "#c6376c";
 
   useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
+    const checkIsMobile = () => setIsMobile(window.innerWidth < 768);
     checkIsMobile();
     window.addEventListener("resize", checkIsMobile);
     return () => window.removeEventListener("resize", checkIsMobile);
   }, []);
 
+  // ✅ Hero -> Manifesto sync: one-time arm
+  const handleMeltFinished = useCallback(() => {
+    if (armedOnceRef.current) return;
+    armedOnceRef.current = true;
+    setManifestoArmed(true);
+  }, []);
+
   useEffect(() => {
     const el = heroWrapRef.current;
     if (!el) return;
+
     const obs = new IntersectionObserver(
-      (entries) => setHeroInView(entries[0]?.isIntersecting ?? true),
+      (entries) => {
+        const isIntersecting = entries[0]?.isIntersecting ?? true;
+        setHeroInView(isIntersecting);
+
+        // Fallback (in case WebGL fails or callback never fires):
+        // arm once when hero fully leaves view.
+        if (!isIntersecting && !armedOnceRef.current) {
+          armedOnceRef.current = true;
+          setManifestoArmed(true);
+        }
+      },
       { threshold: 0 }
     );
+
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
@@ -48,19 +70,24 @@ export default function Home() {
         show={showNav}
         brandColor={brandColor}
       />
-      
-      {/* Wrapper to track intersection for nav */}
+
       <div ref={heroWrapRef}>
         <HeroMeltWebGL
           imageSrc="/images/titleimage.svg"
           onScrolledChange={setShowNav}
           brandColor={brandColor}
           showCaption={showNav}
-        >
-        </HeroMeltWebGL>
+          posterAlt="Slow Drag Studios"
+          posterWidth={1200}
+          posterHeight={600}
+          // ✅ NEW: hero tells us the exact moment it “touches bottom / finishes”
+          onMeltFinished={handleMeltFinished}
+        />
       </div>
 
-<ManifestoMeltWebGLPage />
+      {/* ✅ Reveal begins only after hero melt finishes. Then it reveals top -> bottom with scroll. */}
+      <ManifestoFlowWebGL brandColor={brandColor} armed={manifestoArmed} />
+
       {isMobile ? <MobileFilmsShowcase /> : <FilmsShowcase />}
       <Manifesto2 />
       {isMobile ? <MobileDesignsShowcase /> : <DesignsShowcase />}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 function createShader(gl: WebGLRenderingContext, type: number, src: string) {
   const sh = gl.createShader(type);
@@ -39,6 +39,26 @@ function hexToRgb01(hex: string): [number, number, number] {
   const b = parseInt(n.slice(4, 6), 16) / 255;
   return [r, g, b];
 }
+
+const MANIFESTO_P1 =
+  "Slow Drag Studios is a creative design and film studio built against haste. Our work resists the algorithmic urge to rush, flatten, simplify.";
+const MANIFESTO_P2 =
+  "We work in pulse, not tempo. In memory, not noise. We make films, images, and systems of design that stay long after the scroll ends.";
+
+// Match the exact line breaks from the reference screenshot.
+const MANIFESTO_LINES = [
+  "SLOW DRAG STUDIOS IS A CREATIVE DESIGN",
+  "AND FILM STUDIO BUILT AGAINST HASTE. OUR",
+  "WORK RESISTS THE ALGORITHMIC URGE TO",
+  "RUSH, FLATTEN, SIMPLIFY.",
+  "WE WORK IN PULSE, NOT TEMPO. IN MEMORY,",
+  "NOT NOISE. WE MAKE FILMS, IMAGES, AND",
+  "SYSTEMS OF DESIGN THAT STAY LONG AFTER",
+  "THE SCROLL ENDS.",
+];
+
+const BRAND = "#6e1616ff";
+const BRAND_RGB = hexToRgb01(BRAND);
 
 const VERT = `
 attribute vec2 a_pos;
@@ -150,8 +170,8 @@ void main(){
   float gloss = pow(clamp(rid, 0.0, 1.0), 2.6);
 
   vec3 brand = max(u_brand, vec3(0.0));
-  vec3 deep = brand * 0.22;
-  vec3 body = mix(deep, brand * 0.78, smoothstep(0.08, 0.95, n));
+  vec3 deep = brand * 0.36;
+  vec3 body = mix(deep, brand * 0.92, smoothstep(0.08, 0.95, n));
   vec3 hot = mix(brand, vec3(1.0), 0.55);
 
   // Large, slow moving light sheet
@@ -159,7 +179,7 @@ void main(){
   float sheetH = smoothstep(0.55, 0.92, sheet);
 
   vec3 col = body;
-  col += hot * (0.32 * gloss + 0.18 * sheetH);
+  col += hot * (0.42 * gloss + 0.22 * sheetH);
 
   // Stroke from mask gradient
   float mL = texture2D(u_mask, uv - vec2(px.x, 0.0)).r;
@@ -174,8 +194,8 @@ void main(){
   float gr = (hash21(gl_FragCoord.xy + vec2(u_seed * 100.0, t * 12.0)) - 0.5) * 0.020;
   col *= (1.0 + gr);
 
-  // A tiny lift as it reveals (keeps it feeling intentional/premium).
-  col *= (0.70 + 0.30 * r);
+  // Slight lift to keep the text readable (less dark shade).
+  col *= (0.85 + 0.15 * r);
 
   gl_FragColor = vec4(col, a);
 }
@@ -244,8 +264,7 @@ export default function Manifesto() {
   const hasRevealedOnceRef = useRef<boolean>(false);
   const hasStartedOnceRef = useRef<boolean>(false);
 
-  const brand = "#6e1616ff";
-  const brandRgb = useMemo(() => hexToRgb01(brand), [brand]);
+  const brandRgb = BRAND_RGB;
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -324,38 +343,36 @@ export default function Manifesto() {
       // We target a larger size, but auto-scale down if it would overflow.
       let fontSize = 46 * dpr;
       let lineHeight = fontSize * 1.55;
-      let tracking = fontSize * 0.08;
+      let tracking = fontSize * 0.11;
       const maxTextWidth = Math.min(1100 * dpr, w * 0.94);
 
-      const line1 =
-        "SLOW DRAG STUDIOS IS A CREATIVE DESIGN AND FILM STUDIO BUILT AGAINST HASTE. OUR WORK RESISTS THE ALGORITHMIC URGE TO RUSH, FLATTEN, SIMPLIFY.";
-      const line2 =
-        "WE WORK IN PULSE, NOT TEMPO. IN MEMORY, NOT NOISE. WE MAKE FILMS, IMAGES, AND SYSTEMS OF DESIGN THAT STAY LONG AFTER THE SCROLL ENDS.";
+      const para1 = MANIFESTO_P1.toUpperCase();
+      const para2 = MANIFESTO_P2.toUpperCase();
 
       maskCtx.textBaseline = "top";
       maskCtx.fillStyle = "white";
 
-      const maxTextHeight = h ;
-      let lines: string[] = [];
-      for (let attempt = 0; attempt < 3; attempt++) {
+      const maxTextHeight = h;
+      const lines = MANIFESTO_LINES;
+      for (let attempt = 0; attempt < 6; attempt++) {
         maskCtx.font = `600 ${fontSize}px ${fontFamily}`;
-        lines = [
-          ...wrapWords(maskCtx, line1, maxTextWidth, tracking),
-          ...wrapWords(maskCtx, line2, maxTextWidth, tracking),
-        ];
-
         const totalH = lines.length * lineHeight;
-        if (totalH <= maxTextHeight) break;
-        const scale = maxTextHeight / Math.max(1, totalH);
+        const widest = Math.max(...lines.map((l) => measureTracked(maskCtx, l, tracking)));
+        if (totalH <= maxTextHeight && widest <= maxTextWidth) break;
+
+        const scale = Math.min(
+          maxTextHeight / Math.max(1, totalH),
+          maxTextWidth / Math.max(1, widest)
+        );
         fontSize *= scale;
         lineHeight = fontSize * 1.85;
-        tracking = fontSize * 0.08;
+        tracking = fontSize * 0.11;
       }
 
       const totalH = lines.length * lineHeight;
       const startY = (h - totalH) * 0.5;
       for (let i = 0; i < lines.length; i++) {
-        const txt = lines[i]!.toUpperCase();
+        const txt = lines[i]!;
         const tw = measureTracked(maskCtx, txt, tracking);
         const x = (w - tw) * 0.5;
         const y = startY + i * lineHeight;
@@ -495,7 +512,7 @@ export default function Manifesto() {
       gl.deleteBuffer(tri);
       gl.deleteProgram(prog);
     };
-  }, [brandRgb]);
+  }, []);
 
   return (
     <section
