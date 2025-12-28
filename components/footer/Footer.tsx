@@ -1,6 +1,5 @@
 import React from "react";
 import Link from "next/link";
-import Image from "next/image";
 
 // ✅ SETTING: Icon color set to Black
 const ICON = "#000000"; 
@@ -100,13 +99,11 @@ export default function Footer() {
             {/* BOX 1 */}
             <div className="footer-box1 relative flex min-h-[320px] flex-col items-start justify-between pr-14">
               <div className="footer-logo w-[620px] max-w-full">
-                <Image
+                <img
                   src="/images/fulllogo.png"
                   alt="Slow Drag Studio"
                   width={747}
                   height={421}
-                  sizes="(max-width: 768px) 82vw, 620px"
-                  quality={70}
                   className="w-[82%] select-none object-contain"
                   draggable={false}
                 />
