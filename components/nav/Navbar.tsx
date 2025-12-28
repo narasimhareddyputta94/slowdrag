@@ -205,6 +205,7 @@ export default function Navbar({
             type="button"
             aria-label="Close menu"
             onClick={() => setMenuOpen(false)}
+            tabIndex={menuOpen ? 0 : -1}
             style={{
               position: "absolute",
               right: 18,
@@ -241,6 +242,7 @@ export default function Navbar({
                 key={item.href}
                 type="button"
                 onClick={() => go(item.href)}
+              tabIndex={menuOpen ? 0 : -1}
                 style={{
                     background: "transparent",
                     border: 0,

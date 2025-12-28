@@ -78,7 +78,7 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
             style={{ minHeight: "70vh", background: "#000" }}
           />
         }
-        rootMargin="1400px 0px"
+        rootMargin="0px"
       >
         <ManifestoFlowWebGL brandColor={brandColor} armed={manifestoArmed} />
       </MountWhenNearViewport>
