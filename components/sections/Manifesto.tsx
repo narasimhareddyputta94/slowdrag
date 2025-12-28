@@ -57,7 +57,7 @@ const MANIFESTO_LINES = [
   "THE SCROLL ENDS.",
 ];
 
-const BRAND = "#6e1616ff";
+const BRAND = "#fff0f3";
 const BRAND_RGB = hexToRgb01(BRAND);
 
 const VERT = `

@@ -80,12 +80,12 @@ export default function Home() {
           posterAlt="Slow Drag Studios"
           posterWidth={1200}
           posterHeight={600}
-          // ✅ NEW: hero tells us the exact moment it “touches bottom / finishes”
+          // ✅ hero tells us the exact moment it “touches bottom / finishes”
           onMeltFinished={handleMeltFinished}
         />
       </div>
 
-      {/* ✅ Reveal begins only after hero melt finishes. Then it reveals top -> bottom with scroll. */}
+      {/* ✅ Reveal begins only after hero melt finishes. */}
       <ManifestoFlowWebGL brandColor={brandColor} armed={manifestoArmed} />
 
       {isMobile ? <MobileFilmsShowcase /> : <FilmsShowcase />}

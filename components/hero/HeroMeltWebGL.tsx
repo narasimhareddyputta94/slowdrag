@@ -855,20 +855,28 @@ export default function HeroMeltWebGL({
       return rect.top <= 0 && rect.bottom >= winH * 0.85;
     };
 
-    const applyDelta = (dy: number) => {
-      const winH = window.innerHeight || 900;
-      const lockDistance = winH;
-      s.virtualScroll = Math.max(0, Math.min(lockDistance, s.virtualScroll + dy));
-      if (s.virtualScroll >= lockDistance - 0.5) {
-        s.lockDone = true;
-        s.lockActive = false;
+    // Inside HeroMeltWebGL.tsx, locate the applyDelta function within the scroll-lock useEffect:
 
-        if (!meltFinishedOnceRef.current) {
-          meltFinishedOnceRef.current = true;
-          onMeltFinishedRef.current?.();
-        }
+const applyDelta = (dy: number) => {
+  const winH = window.innerHeight || 900;
+  const lockDistance = winH;
+  
+  s.virtualScroll = Math.max(0, Math.min(lockDistance, s.virtualScroll + dy));
+  
+  // Precision check: When the melt hits the bottom of the lock
+  if (s.virtualScroll >= lockDistance - 1) { 
+    if (!s.lockDone) {
+      s.lockDone = true;
+      s.lockActive = false;
+      
+      // Fire the sync signal to Manifesto
+      if (!meltFinishedOnceRef.current) {
+        meltFinishedOnceRef.current = true;
+        onMeltFinishedRef.current?.(); 
       }
-    };
+    }
+  }
+};
 
     const onWheel = (e: WheelEvent) => {
       if (!shouldLockNow()) return;

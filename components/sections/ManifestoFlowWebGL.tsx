@@ -26,10 +26,43 @@ const MANIFESTO_LINES = [
 // Letter spacing (tracking) as a fraction of font size.
 const TRACKING_FACTOR = 0.11;
 
+// ✅ Requested: full fade-in to the same flow color in 3 seconds
+const REVEAL_SECONDS = 3.0;
+// Start the reveal/fade a little later to avoid feeling early
+const REVEAL_DELAY_MS = 600;
+
 /* ---------------- Color Helpers ---------------- */
 function srgbToLinear(c: number) {
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
+
+function clamp255(v: number) {
+  return Math.max(0, Math.min(255, v));
+}
+
+function hexToRgb255(hex: string): [number, number, number] {
+  const h = hex.replace("#", "").trim();
+  const v = h.length === 3 ? h.split("").map((ch) => ch + ch).join("") : h;
+  if (!/^[0-9a-fA-F]{6}$/.test(v)) return [0, 0, 0];
+  const r = parseInt(v.slice(0, 2), 16);
+  const g = parseInt(v.slice(2, 4), 16);
+  const b = parseInt(v.slice(4, 6), 16);
+  return [r, g, b];
+}
+
+function rgb255ToLinear(rgb: [number, number, number]): [number, number, number] {
+  return [srgbToLinear(rgb[0] / 255), srgbToLinear(rgb[1] / 255), srgbToLinear(rgb[2] / 255)];
+}
+
+function mixRgb255(a: [number, number, number], b: [number, number, number], t: number) {
+  const tt = Math.max(0, Math.min(1, t));
+  return [
+    clamp255(Math.round(a[0] * (1 - tt) + b[0] * tt)),
+    clamp255(Math.round(a[1] * (1 - tt) + b[1] * tt)),
+    clamp255(Math.round(a[2] * (1 - tt) + b[2] * tt)),
+  ] as [number, number, number];
+}
+
 function hexToLinearRGB(hex: string): [number, number, number] {
   const h = hex.replace("#", "").trim();
   const v = h.length === 3 ? h.split("").map((ch) => ch + ch).join("") : h;
@@ -39,6 +72,10 @@ function hexToLinearRGB(hex: string): [number, number, number] {
   const b = parseInt(v.slice(4, 6), 16) / 255;
   return [srgbToLinear(r), srgbToLinear(g), srgbToLinear(b)];
 }
+
+// Slightly white-red tint for the manifesto “text color” (the flow behind the cutout).
+const MANIFESTO_TINT_SRGB: [number, number, number] = [255, 240, 243];
+const MANIFESTO_TINT_MIX = 0.65;
 
 /* ---------------- WebGL Helpers ---------------- */
 function createShader(gl: WebGLRenderingContext, type: number, src: string) {
@@ -53,20 +90,25 @@ function createShader(gl: WebGLRenderingContext, type: number, src: string) {
   }
   return sh;
 }
+
 function createProgram(gl: WebGLRenderingContext, vsSrc: string, fsSrc: string) {
   const vs = createShader(gl, gl.VERTEX_SHADER, vsSrc);
   const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSrc);
   if (!vs || !fs) return null;
+
   const pr = gl.createProgram();
   if (!pr) return null;
+
   gl.attachShader(pr, vs);
   gl.attachShader(pr, fs);
   gl.linkProgram(pr);
+
   if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) {
     console.error("Program link error:", gl.getProgramInfoLog(pr));
     gl.deleteProgram(pr);
     return null;
   }
+
   gl.deleteShader(vs);
   gl.deleteShader(fs);
   return pr;
@@ -82,6 +124,8 @@ void main() {
 }
 `;
 
+// ✅ Changed: instead of “top->bottom reveal”, we do a uniform 3s fade.
+// The canvas is still masked to text via CSS mask-image, so it reads as “text color fades in”.
 const FRAG = `
 precision mediump float;
 
@@ -124,24 +168,27 @@ void main() {
   // animated flow field
   float t = u_time;
   vec2 p = uv * vec2(1.2, 1.0);
-  p.x += 0.12*sin(t*0.8 + uv.y*3.0);
-  p.y += 0.18*cos(t*0.65 + uv.x*2.0);
+  // Softer wobble to reduce visible jitter
+  p.x += 0.06*sin(t*0.8 + uv.y*3.0);
+  p.y += 0.09*cos(t*0.65 + uv.x*2.0);
 
   float n = fbm(p*3.2 + vec2(0.0, t*0.25));
   float n2 = fbm(p*6.2 - vec2(t*0.18, 0.0));
 
   float flow = smoothstep(0.25, 0.9, n*0.7 + n2*0.3);
 
-  // Reveal top -> bottom (u_reveal goes 0..1)
-  float yFront = clamp(u_reveal, 0.0, 1.0);
-  float y = 1.0 - uv.y;
-  float revealMask = smoothstep(0.0, 1.0, (yFront - y) * 4.0);
+  // ✅ Uniform reveal (fade) 0..1
+  float r = clamp(u_reveal, 0.0, 1.0);
+  float revealMask = r;
 
   vec3 col = u_color;
-  col += 0.12*vec3(1.0, 0.9, 1.0) * n2;
+  // Subtle highlight to avoid blinking
+  col += 0.06*vec3(1.0, 0.9, 1.0) * n2;
 
-  vec3 rgb = col * (0.35 + 0.65 * flow) * revealMask;
-  gl_FragColor = vec4(rgb, 1.0);
+  vec3 rgb = col * (0.35 + 0.65 * flow);
+
+  // Fade BOTH rgb + alpha so the text comes from “nothing” to full color.
+  gl_FragColor = vec4(rgb * revealMask, revealMask);
 }
 `;
 
@@ -180,10 +227,13 @@ export default function ManifestoFlowWebGL({
   armed = false,
 }: ManifestoFlowWebGLProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fallbackTextRef = useRef<HTMLDivElement | null>(null);
+  const [useFallback, setUseFallback] = useState(false);
 
   const [ready, setReady] = useState(false);
   const [textMaskUrl, setTextMaskUrl] = useState<string | null>(null);
   const readyRef = useRef(false);
+  const maskReadyRef = useRef(false);
 
   const didInitRef = useRef(false);
   const inViewRef = useRef(false);
@@ -192,8 +242,8 @@ export default function ManifestoFlowWebGL({
   const revealTargetRef = useRef(0);
   const revealPRef = useRef(0);
 
-  // When armed, we “anchor” the starting top so reveal begins at 0 exactly at that moment
-  const revealStartMsRef = useRef<number | null>(null);
+  // When armed, anchor start so reveal begins at 0 exactly at that moment
+  const revealAnchorTopRef = useRef<number | null>(null);
   const revealCompletedRef = useRef(false);
 
   // Time that only advances while in view (prevents jumping)
@@ -201,20 +251,31 @@ export default function ManifestoFlowWebGL({
   const elapsedMsRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
   const lastFrameMsRef = useRef<number>(0);
+  const fadeRef = useRef(0);
 
   const armedRef = useRef(armed);
+
   useEffect(() => {
     armedRef.current = armed;
-    // Arm moment: reset anchor so reveal starts clean from the top line.
     if (armed) {
-      revealStartMsRef.current = null;
+      revealAnchorTopRef.current = null;
       revealCompletedRef.current = false;
       revealTargetRef.current = 0;
       revealPRef.current = 0;
+      fadeRef.current = 0;
     }
   }, [armed]);
 
-  const brandRgb = useMemo(() => hexToLinearRGB(brandColor), [brandColor]);
+  const flowRgb255 = useMemo(() => {
+    const base = hexToRgb255(brandColor);
+    return mixRgb255(base, MANIFESTO_TINT_SRGB, MANIFESTO_TINT_MIX);
+  }, [brandColor]);
+
+  const flowRgbLinear = useMemo(() => rgb255ToLinear(flowRgb255), [flowRgb255]);
+  const flowRgbCss = useMemo(
+    () => `${flowRgb255[0]} ${flowRgb255[1]} ${flowRgb255[2]}`,
+    [flowRgb255]
+  );
 
   useEffect(() => {
     const canvasEl = canvasRef.current;
@@ -230,6 +291,11 @@ export default function ManifestoFlowWebGL({
       window.matchMedia &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+    const supportsMask =
+      typeof CSS !== "undefined" &&
+      (CSS.supports("mask-image", 'url("data:image/png;base64,iVBORw0KGgo=")') ||
+        CSS.supports("-webkit-mask-image", 'url("data:image/png;base64,iVBORw0KGgo=")'));
+
     const gl = canvas.getContext("webgl", {
       alpha: true,
       premultipliedAlpha: false,
@@ -238,7 +304,105 @@ export default function ManifestoFlowWebGL({
       stencil: false,
       preserveDrawingBuffer: false,
     });
-    if (!gl) return;
+    if (!supportsMask || !gl) {
+      setUseFallback(true);
+
+      const el = fallbackTextRef.current;
+      if (!el) return;
+
+      const start = () => {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+
+        // resume active-time clock
+        t0Ref.current = performance.now();
+        lastFrameMsRef.current = 0;
+        rafRef.current = requestAnimationFrame(renderFallback);
+      };
+
+      const stop = () => {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+
+        // pause active-time clock
+        const now = performance.now();
+        if (t0Ref.current) {
+          elapsedMsRef.current += Math.max(0, now - t0Ref.current);
+          t0Ref.current = 0;
+        }
+      };
+
+      const io = new IntersectionObserver(
+        (entries) => {
+          const next = entries[0]?.isIntersecting ?? false;
+          inViewRef.current = next;
+          if (next) start();
+          else stop();
+        },
+        { threshold: 0.15 }
+      );
+      io.observe(section);
+
+      const renderFallback = () => {
+        if (!inViewRef.current) return;
+
+        const now = performance.now();
+        if (!t0Ref.current) t0Ref.current = now;
+        const activeMs = elapsedMsRef.current + Math.max(0, now - t0Ref.current);
+
+        const dtMs = lastFrameMsRef.current ? now - lastFrameMsRef.current : 16.7;
+        lastFrameMsRef.current = now;
+        const dt = Math.max(0.001, Math.min(0.05, dtMs / 1000));
+
+        let target = 0;
+        if (prefersReducedMotion) {
+          target = armedRef.current ? 1 : 0;
+        } else if (armedRef.current) {
+          const rect = section.getBoundingClientRect();
+          const vh = Math.max(1, window.innerHeight || 1);
+
+          if (revealAnchorTopRef.current == null) {
+            revealAnchorTopRef.current = rect.top;
+          }
+
+          const travelPx = revealAnchorTopRef.current - rect.top;
+          const revealPxPerSecond = vh * 0.55;
+          const delayPxPerSecond = vh * 0.35;
+          const delayPx = (REVEAL_DELAY_MS / 1000) * delayPxPerSecond;
+          const distancePx = Math.max(1, REVEAL_SECONDS * revealPxPerSecond);
+
+          const raw = (travelPx - delayPx) / distancePx;
+          target = clamp01(raw);
+
+          if (!revealCompletedRef.current && target >= 0.999) {
+            revealCompletedRef.current = true;
+            target = 1;
+          }
+          if (revealCompletedRef.current) target = 1;
+        }
+
+        revealTargetRef.current = target;
+
+        revealPRef.current =
+          revealPRef.current +
+          (revealTargetRef.current - revealPRef.current) * (1 - Math.exp(-dt * 9.0));
+
+        const revealLinear = prefersReducedMotion ? (armedRef.current ? 1 : 0) : revealPRef.current;
+        const reveal = revealLinear * revealLinear * (3.0 - 2.0 * revealLinear);
+
+        let fadeTarget = reveal;
+        if (fadeTarget < fadeRef.current) fadeTarget = fadeRef.current;
+        fadeRef.current += (fadeTarget - fadeRef.current) * (1 - Math.exp(-dt * 3.5));
+
+        el.style.opacity = String(fadeRef.current);
+        rafRef.current = requestAnimationFrame(renderFallback);
+      };
+
+      return () => {
+        io.disconnect();
+        stop();
+      };
+    }
 
     const prog = createProgram(gl, VERT, FRAG);
     if (!prog) return;
@@ -250,11 +414,7 @@ export default function ManifestoFlowWebGL({
 
     const tri = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, tri);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([-1, -1, 3, -1, -1, 3]),
-      gl.STATIC_DRAW
-    );
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
 
     // Build the text mask as a data URL (used as CSS mask-image on the canvas)
     const maskCanvas = document.createElement("canvas");
@@ -283,13 +443,10 @@ export default function ManifestoFlowWebGL({
       maskCtx.setTransform(1, 0, 0, 1, 0, 0);
       maskCtx.clearRect(0, 0, w, h);
 
-      // IMPORTANT: CSS mask uses alpha. Keep background transparent,
-      // and draw ONLY the text as opaque white.
+      // CSS mask uses alpha. Background transparent, draw ONLY text as opaque white.
       maskCtx.globalCompositeOperation = "source-over";
 
-      const fontVar = getComputedStyle(document.body)
-        .getPropertyValue("--font-offbit")
-        .trim();
+      const fontVar = getComputedStyle(document.body).getPropertyValue("--font-offbit").trim();
       const fontFamily = fontVar || "system-ui";
 
       // Size logic: big, but auto-scales down if it overflows
@@ -306,9 +463,7 @@ export default function ManifestoFlowWebGL({
       for (let attempt = 0; attempt < 6; attempt++) {
         maskCtx.font = `700 ${fontSize}px ${fontFamily}`;
         const totalH = MANIFESTO_LINES.length * lineHeight;
-        const widest = Math.max(
-          ...MANIFESTO_LINES.map((l) => measureTracked(maskCtx, l, tracking))
-        );
+        const widest = Math.max(...MANIFESTO_LINES.map((l) => measureTracked(maskCtx, l, tracking)));
 
         if (totalH <= maxTextHeight && widest <= maxTextWidth) break;
 
@@ -334,8 +489,8 @@ export default function ManifestoFlowWebGL({
         drawTrackedText(maskCtx, line, x, y, tracking);
       }
 
-      // Push to CSS mask
       setTextMaskUrl(maskCanvas.toDataURL("image/png"));
+      maskReadyRef.current = true;
     };
 
     const ro = new ResizeObserver(() => {
@@ -391,23 +546,36 @@ export default function ManifestoFlowWebGL({
       lastFrameMsRef.current = now;
       const dt = Math.max(0.001, Math.min(0.05, dtMs / 1000));
 
-      // ✅ Compute reveal target ONLY AFTER armed
+      // ✅ Reveal target ONLY AFTER armed
       let target = 0;
 
       if (prefersReducedMotion) {
         target = armedRef.current ? 1 : 0;
       } else if (armedRef.current) {
-        // Start revealing as soon as the section is visible and armed.
-        // This is synced to hero via the `armed` prop (onMeltFinished).
-        if (revealStartMsRef.current == null) {
-          revealStartMsRef.current = activeMs;
+        // Scroll-synced reveal (feels linked to the hero melt scroll, not a timer)
+        const rect = section.getBoundingClientRect();
+        const vh = Math.max(1, window.innerHeight || 1);
+
+        // Anchor the reveal at the moment the section first becomes visible after arming.
+        if (revealAnchorTopRef.current == null) {
+          revealAnchorTopRef.current = rect.top;
         }
 
-        const revealSeconds = 7.5;
-        const raw = (activeMs - revealStartMsRef.current) / (revealSeconds * 1000);
+        const travelPx = revealAnchorTopRef.current - rect.top;
+
+        // Reuse existing tuning knobs:
+        // - delay is a small scroll distance before reveal starts
+        // - "seconds" maps to a scroll distance so the feel matches previous pacing
+        // NOTE: Increasing this value makes the reveal slower (more scroll needed).
+        const revealPxPerSecond = vh * 0.55;
+        // Keep the delay feel consistent even if we retune reveal speed.
+        const delayPxPerSecond = vh * 0.35;
+        const delayPx = (REVEAL_DELAY_MS / 1000) * delayPxPerSecond;
+        const distancePx = Math.max(1, REVEAL_SECONDS * revealPxPerSecond);
+
+        const raw = (travelPx - delayPx) / distancePx;
         target = clamp01(raw);
 
-        // once complete, keep it locked (no flicker if user scrolls back slightly)
         if (!revealCompletedRef.current && target >= 0.999) {
           revealCompletedRef.current = true;
           target = 1;
@@ -418,11 +586,22 @@ export default function ManifestoFlowWebGL({
       revealTargetRef.current = target;
 
       // Smooth reveal
-      revealPRef.current = revealPRef.current + (revealTargetRef.current - revealPRef.current) * (1 - Math.exp(-dt * 9.0));
+      revealPRef.current =
+        revealPRef.current +
+        (revealTargetRef.current - revealPRef.current) * (1 - Math.exp(-dt * 9.0));
 
-      const reveal = prefersReducedMotion ? (armedRef.current ? 1 : 0) : revealPRef.current;
-      const glow = reveal;
-      canvas.style.setProperty("--mf-glow", String(glow));
+      const revealLinear = prefersReducedMotion ? (armedRef.current ? 1 : 0) : revealPRef.current;
+
+      // Ease-in-out for smoother start/end.
+      const reveal = revealLinear * revealLinear * (3.0 - 2.0 * revealLinear);
+
+      // Keep glow synced to reveal amount
+      canvas.style.setProperty("--mf-glow", String(reveal));
+      // Monotonic, smoothed fade to avoid visible blinking
+      let fadeTarget = reveal;
+      if (fadeTarget < fadeRef.current) fadeTarget = fadeRef.current; // never decrease
+      fadeRef.current += (fadeTarget - fadeRef.current) * (1 - Math.exp(-dt * 3.5));
+      canvas.style.opacity = maskReadyRef.current ? String(fadeRef.current) : "0";
 
       // Draw
       gl.useProgram(prog);
@@ -434,7 +613,7 @@ export default function ManifestoFlowWebGL({
       const t = activeMs / 1000;
 
       if (uTime) gl.uniform1f(uTime, t);
-      if (uColor) gl.uniform3f(uColor, brandRgb[0], brandRgb[1], brandRgb[2]);
+      if (uColor) gl.uniform3f(uColor, flowRgbLinear[0], flowRgbLinear[1], flowRgbLinear[2]);
       if (uReveal) gl.uniform1f(uReveal, reveal);
 
       gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -454,15 +633,15 @@ export default function ManifestoFlowWebGL({
       gl.deleteBuffer(tri);
       gl.deleteProgram(prog);
     };
-    // Intentionally init once
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandRgb]);
+  }, [flowRgbLinear]);
 
   return (
     <section
       aria-label="Manifesto"
       aria-describedby="manifesto-a11y"
-      style={{
+      style={
+        {
         minHeight: "70vh",
         background: "#000",
         display: "grid",
@@ -470,7 +649,9 @@ export default function ManifestoFlowWebGL({
         padding: 0,
         position: "relative",
         overflow: "hidden",
-      }}
+        "--flow-color-rgb": flowRgbCss,
+        } as React.CSSProperties
+      }
     >
       {/* Accessible text (not visible) */}
       <p
@@ -495,28 +676,62 @@ export default function ManifestoFlowWebGL({
         ref={canvasRef}
         aria-hidden="true"
         style={{
+          display: useFallback ? "none" : "block",
           position: "absolute",
           inset: 0,
           width: "100%",
           height: "100%",
-          display: "block",
           pointerEvents: "none",
-          opacity: ready && textMaskUrl ? 1 : 0,
-          transition: "opacity 450ms ease",
+          opacity: 0,
           willChange: "opacity",
           zIndex: 0,
+
           WebkitMaskImage: textMaskUrl ? `url(${textMaskUrl})` : undefined,
           WebkitMaskRepeat: "no-repeat",
           WebkitMaskPosition: "center",
           WebkitMaskSize: "100% 100%",
+
           maskImage: textMaskUrl ? `url(${textMaskUrl})` : undefined,
           maskRepeat: "no-repeat",
           maskPosition: "center",
           maskSize: "100% 100%",
+
           filter:
             "drop-shadow(0 0 calc(10px * var(--mf-glow, 0)) rgb(var(--flow-color-rgb) / 0.35)) drop-shadow(0 0 calc(22px * var(--mf-glow, 0)) rgb(var(--flow-color-rgb) / 0.14))",
         }}
       />
+
+      {/* Fallback (mobile / no WebGL / no mask support): render real text */}
+      <div
+        ref={fallbackTextRef}
+        aria-hidden={!useFallback}
+        style={{
+          display: useFallback ? "grid" : "none",
+          placeItems: "center",
+          textAlign: "center",
+          padding: "0 20px",
+          width: "100%",
+          zIndex: 1,
+          opacity: 0,
+          color: `rgb(${flowRgbCss} / 0.95)`,
+          filter:
+            "drop-shadow(0 0 calc(10px * var(--mf-glow, 0)) rgb(var(--flow-color-rgb) / 0.35)) drop-shadow(0 0 calc(22px * var(--mf-glow, 0)) rgb(var(--flow-color-rgb) / 0.14))",
+        }}
+      >
+        <div
+          style={{
+            fontWeight: 700,
+            lineHeight: 1.55,
+            letterSpacing: "0.11em",
+            fontSize: "clamp(14px, 3.2vw, 28px)",
+            maxWidth: "1100px",
+          }}
+        >
+          {MANIFESTO_LINES.map((line) => (
+            <div key={line}>{line}</div>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
