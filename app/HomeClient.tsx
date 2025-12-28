@@ -1,9 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Navbar from "@/components/nav/Navbar";
 import HeroMeltWebGL from "@/components/hero/HeroMeltWebGL";
-import ManifestoFlowWebGL from "@/components/sections/ManifestoFlowWebGL";
+import MountWhenNearViewport from "@/components/perf/MountWhenNearViewport";
+
+const ManifestoFlowWebGL = dynamic(() => import("@/components/sections/ManifestoFlowWebGL"), {
+  ssr: false,
+});
 
 export default function HomeClient({ brandColor }: { brandColor: string }) {
   const [showNav, setShowNav] = useState(false);
@@ -66,7 +71,17 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
         />
       </div>
 
-      <ManifestoFlowWebGL brandColor={brandColor} armed={manifestoArmed} />
+      <MountWhenNearViewport
+        // Reserve layout to keep CLS at 0.
+        placeholder={
+          <section
+            style={{ minHeight: "70vh", background: "#000" }}
+          />
+        }
+        rootMargin="1400px 0px"
+      >
+        <ManifestoFlowWebGL brandColor={brandColor} armed={manifestoArmed} />
+      </MountWhenNearViewport>
     </>
   );
 }

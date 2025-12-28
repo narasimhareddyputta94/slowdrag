@@ -19,7 +19,7 @@ export default function Manifesto2() {
         style={{
           maxWidth: 900,
           textAlign: "center",
-          fontFamily: "var(--font-offbit)",
+          fontFamily: "var(--font-offbit-101)",
           fontSize: 36,
           lineHeight: 1.55,
           letterSpacing: "0.08em",

@@ -1,5 +1,5 @@
 import "./globals.css";
-import { offbit } from "./fonts";
+import { offBit101, offbit } from "./fonts";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -39,7 +39,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${offbit.variable} antialiased`}>{children}</body>
+      <body className={`${offbit.variable} ${offBit101.variable} antialiased`}>{children}</body>
     </html>
   );
 }
