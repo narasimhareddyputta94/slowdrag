@@ -1,5 +1,3 @@
-"use client";
-
 import React from "react";
 import Link from "next/link";
 
@@ -173,7 +171,7 @@ export default function Footer() {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         /* Mobile-only footer optimization; desktop remains unchanged */
         @media (max-width: 767px) {
           .footer-inner {

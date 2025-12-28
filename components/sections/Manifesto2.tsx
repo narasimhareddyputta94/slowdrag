@@ -1,5 +1,3 @@
-"use client";
-
 import React from "react";
 
 export default function Manifesto2() {
@@ -40,7 +38,7 @@ export default function Manifesto2() {
         </p>
       </div>
 
-      <style jsx>{`
+      <style>{`
         @media (max-width: 767px) {
           .manifesto2 {
             min-height: 60svh !important;

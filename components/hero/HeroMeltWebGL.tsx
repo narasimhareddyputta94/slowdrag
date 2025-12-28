@@ -552,6 +552,10 @@ export default function HeroMeltWebGL({
 
     // ✅ Batch scroll fixing into rAF to avoid stutter
     fixScrollRaf: 0,
+
+    // Performance: pause RAF when offscreen / tab hidden
+    inView: true,
+    pageVisible: true,
   });
 
   const scheduleFixScroll = () => {
@@ -570,6 +574,7 @@ export default function HeroMeltWebGL({
       const s = S.current;
       const gl = s.gl;
       if (!gl || !s.loaded || !s.maskProg || !s.renderProg || !s.postProg) return;
+      if (!s.inView || !s.pageVisible) return;
 
       // ✅ Hide poster once WebGL is actually running (LCP has already happened)
       if (!posterHideOnceRef.current) {
@@ -817,13 +822,55 @@ export default function HeroMeltWebGL({
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       s.ping = 1 - s.ping;
-      if (loopRef.current) s.raf = requestAnimationFrame(loopRef.current);
+      if (loopRef.current && s.inView && s.pageVisible) s.raf = requestAnimationFrame(loopRef.current);
     };
 
     return () => {
       loopRef.current = null;
     };
   }, [brandColor, brandLin, onScrolledChange]);
+
+  // Pause/resume the WebGL loop when the hero leaves the viewport or when the tab is hidden.
+  useEffect(() => {
+    const s = S.current;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const updateRunState = () => {
+      if (!s.pageVisible || !s.inView) {
+        cancelAnimationFrame(s.raf);
+        return;
+      }
+      if (loopRef.current && s.loaded) {
+        cancelAnimationFrame(s.raf);
+        s.raf = requestAnimationFrame(loopRef.current);
+      }
+    };
+
+    const onVis = () => {
+      s.pageVisible = !document.hidden;
+      updateRunState();
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        s.inView = entries[0]?.isIntersecting ?? true;
+        updateRunState();
+      },
+      { threshold: 0.01 }
+    );
+    io.observe(el);
+
+    // initialize
+    s.pageVisible = !document.hidden;
+    updateRunState();
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      io.disconnect();
+    };
+  }, []);
 
   /* ---------------- NATIVE SCROLL LISTENER ---------------- */
   useEffect(() => {

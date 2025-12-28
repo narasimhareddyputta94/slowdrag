@@ -343,6 +343,12 @@ export default function ManifestoFlowWebGL({
       );
       io.observe(section);
 
+      const onVis = () => {
+        if (document.hidden) stop();
+        else if (inViewRef.current) start();
+      };
+      document.addEventListener("visibilitychange", onVis);
+
       const renderFallback = () => {
         if (!inViewRef.current) return;
 
@@ -400,6 +406,7 @@ export default function ManifestoFlowWebGL({
 
       return () => {
         io.disconnect();
+        document.removeEventListener("visibilitychange", onVis);
         stop();
       };
     }
@@ -534,6 +541,12 @@ export default function ManifestoFlowWebGL({
     );
     io.observe(section);
 
+    const onVis = () => {
+      if (document.hidden) stop();
+      else if (inViewRef.current) start();
+    };
+    document.addEventListener("visibilitychange", onVis);
+
     const render = () => {
       if (!inViewRef.current) return;
 
@@ -629,6 +642,7 @@ export default function ManifestoFlowWebGL({
     return () => {
       io.disconnect();
       ro.disconnect();
+      document.removeEventListener("visibilitychange", onVis);
       stop();
       gl.deleteBuffer(tri);
       gl.deleteProgram(prog);
