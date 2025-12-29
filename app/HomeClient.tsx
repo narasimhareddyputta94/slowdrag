@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Navbar from "@/components/nav/Navbar";
 import HeroMeltWebGL from "@/components/hero/HeroMeltWebGL";
 import MountWhenNearViewport from "@/components/perf/MountWhenNearViewport";
+import SmoothScrollLenis from "@/components/perf/SmoothScrollLenis";
 
 const ManifestoFlowWebGL = dynamic(() => import("@/components/sections/ManifestoFlowWebGL"), {
   ssr: false,
@@ -15,6 +16,8 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
   const [heroInView, setHeroInView] = useState(true);
   const heroWrapRef = useRef<HTMLDivElement | null>(null);
 
+  const [smoothScrollEnabled, setSmoothScrollEnabled] = useState(false);
+
   // Armed exactly when Hero reports “melt touched bottom / finished”
   const [manifestoArmed, setManifestoArmed] = useState(false);
   const armedOnceRef = useRef(false);
@@ -23,6 +26,7 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
     if (armedOnceRef.current) return;
     armedOnceRef.current = true;
     setManifestoArmed(true);
+    setSmoothScrollEnabled(true);
   }, []);
 
   useEffect(() => {
@@ -50,6 +54,8 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
 
   return (
     <>
+      <SmoothScrollLenis enabled={smoothScrollEnabled} />
+
       <Navbar
         logoSrc="/images/logo.png"
         logoAltSrc="/images/fulllogo.png"

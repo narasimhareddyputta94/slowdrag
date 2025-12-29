@@ -489,6 +489,7 @@ export default function HeroMeltWebGL({
   // LCP poster: visible instantly, then fades away once WebGL is ready.
   const [showPoster, setShowPoster] = useState(true);
   const posterHideOnceRef = useRef(false);
+  const heroReadyOnceRef = useRef(false);
 
   const shaders = useMemo(() => ({ VERT, MASK_FRAG, RENDER_FRAG, POST_FRAG }), []);
   const brandLin = useMemo(() => hexToLinearRgb(brandColor), [brandColor]);
@@ -957,6 +958,11 @@ export default function HeroMeltWebGL({
         }
 
         s.loaded = true;
+
+        if (!heroReadyOnceRef.current) {
+          heroReadyOnceRef.current = true;
+          window.dispatchEvent(new Event("slowdrag:heroReady"));
+        }
         cancelAnimationFrame(s.raf);
         if (loopRef.current) s.raf = requestAnimationFrame(loopRef.current);
       };
@@ -1052,6 +1058,8 @@ export default function HeroMeltWebGL({
     window.addEventListener("wheel", startNow, { passive: true, once: true });
     window.addEventListener("touchstart", startNow, { passive: true, once: true });
     window.addEventListener("keydown", startNow, { passive: true, once: true });
+    // Start as soon as the initial loading overlay dismisses.
+    window.addEventListener("slowdrag:siteLoaded", startNow, { once: true });
 
     // PSI/Lighthouse measures main-thread work during the initial load window.
     // The WebGL init + continuous RAF loop can dominate TBT even though the
@@ -1066,6 +1074,7 @@ export default function HeroMeltWebGL({
       window.removeEventListener("wheel", startNow);
       window.removeEventListener("touchstart", startNow);
       window.removeEventListener("keydown", startNow);
+      window.removeEventListener("slowdrag:siteLoaded", startNow);
 
       const w = window as unknown as { cancelIdleCallback?: (id: number) => void };
       if (idleId !== undefined && typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
