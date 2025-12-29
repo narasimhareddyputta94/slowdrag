@@ -12,7 +12,7 @@ export default function FilmsSectionClient() {
   return (
     <MountWhenNearViewport
       placeholder={<section aria-hidden className="relative w-full min-h-screen bg-black" />}
-      rootMargin="600px 0px"
+      rootMargin="200px 0px"
     >
       <FilmsShowcaseResponsive />
     </MountWhenNearViewport>

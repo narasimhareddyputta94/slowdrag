@@ -10,6 +10,7 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
   const [phase, setPhase] = useState<"show" | "hide" | "gone">("show");
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const dismissedOnceRef = useRef(false);
+  const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const prevHtmlOverflow = document.documentElement.style.overflow;
@@ -19,26 +20,26 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
     document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
 
-    const v = videoRef.current;
-    if (v) {
-      // Best-effort attempt to ensure playback starts.
-      const p = v.play();
-      if (p) p.catch(() => {});
-    }
+    let raf1 = 0;
+    let raf2 = 0;
 
     let dismissed = false;
     let fadeTimer: number | undefined;
     let goneTimer: number | undefined;
 
+    const dispatchSiteLoadedOnce = () => {
+      if (dismissedOnceRef.current) return;
+      dismissedOnceRef.current = true;
+      (window as unknown as { __slowdrag_siteLoaded?: boolean }).__slowdrag_siteLoaded = true;
+      window.dispatchEvent(new Event("slowdrag:siteLoaded"));
+    };
+
     const dismiss = () => {
       if (dismissed) return;
       dismissed = true;
 
-      // Start booting the hero while the overlay is still visible.
-      if (!dismissedOnceRef.current) {
-        dismissedOnceRef.current = true;
-        window.dispatchEvent(new Event("slowdrag:siteLoaded"));
-      }
+      // Ensure we boot the hero while the overlay is still visible.
+      dispatchSiteLoadedOnce();
 
       // Fade out (still mounted so the transition can run).
       setPhase("hide");
@@ -61,11 +62,12 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
       }, 1200);
     };
 
-    // Boot the hero behind the overlay after at least one paint.
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        window.dispatchEvent(new Event("slowdrag:siteLoaded"));
-      })
+    // After at least one paint, start the loader video and boot the hero.
+    raf1 = requestAnimationFrame(() =>
+      (raf2 = requestAnimationFrame(() => {
+        setVideoSrc(src);
+        dispatchSiteLoadedOnce();
+      }))
     );
 
     // Primary dismissal signal: hero is ready to be shown.
@@ -80,6 +82,9 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
       if (fadeTimer !== undefined) window.clearTimeout(fadeTimer);
       if (goneTimer !== undefined) window.clearTimeout(goneTimer);
       window.clearTimeout(safetyTimer);
+
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
 
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.body.style.overflow = prevBodyOverflow;
@@ -117,12 +122,12 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
           transformOrigin: "center",
           objectFit: "contain",
         }}
-        src={src}
+        src={videoSrc}
         autoPlay
         muted
         loop
         playsInline
-        preload="auto"
+        preload="metadata"
       />
     </div>
   );

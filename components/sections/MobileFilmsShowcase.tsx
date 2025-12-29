@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import useIsMobile from "@/components/perf/useIsMobile";
 import useNearViewport from "@/components/perf/useNearViewport";
+import useAfterFirstPaint from "@/components/perf/useAfterFirstPaint";
+import useSiteLoaded from "@/components/perf/useSiteLoaded";
 
 type FilmItem = {
   title: string;
@@ -98,8 +100,17 @@ export default function MobileFilmsShowcase() {
 
   const rootRef = useRef<HTMLElement | null>(null);
   const isSmallScreen = useIsMobile(768);
-  const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "600px 0px" });
-  const canLoadVideo = !isSmallScreen || near;
+  const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "200px 0px" });
+  const siteLoaded = useSiteLoaded();
+  const afterFirstPaint = useAfterFirstPaint();
+  const [activated, setActivated] = useState(false);
+
+  useEffect(() => {
+    if (activated) return;
+    if (siteLoaded && afterFirstPaint && near) setActivated(true);
+  }, [activated, afterFirstPaint, near, siteLoaded]);
+
+  const canLoadVideo = activated;
 
   const films: FilmItem[] = useMemo(() => {
     const videoFiles = [
@@ -109,12 +120,13 @@ export default function MobileFilmsShowcase() {
       "Showreel.mp4",
     ].sort((a, b) => a.localeCompare(b));
 
+    const poster = isSmallScreen ? "/images/titleimage-1200.webp" : "/images/titleimage-1920.webp";
     return videoFiles.map((name) => ({
       title: name.replace(/\.[^./]+$/, ""),
       src: `/website_videos/${encodeURIComponent(name)}`,
-      poster: "/images/titleimage.png",
+      poster,
     }));
-  }, []);
+  }, [isSmallScreen]);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [phase, setPhase] = useState<"idle" | "out" | "in">("idle");
@@ -163,12 +175,12 @@ export default function MobileFilmsShowcase() {
     }
   }, [muted, canLoadVideo]);
 
+  // Pause when offscreen to reduce CPU/battery.
   useEffect(() => {
-    if (!isSmallScreen) return;
     const v = videoRef.current;
     if (!v) return;
     if (!near) v.pause();
-  }, [isSmallScreen, near]);
+  }, [near]);
 
   const requestIndex = (nextIndex: number) => {
     if (nextIndex === activeIndex) return;
@@ -365,7 +377,7 @@ export default function MobileFilmsShowcase() {
                   <video
                     ref={videoRef}
                     src={canLoadVideo ? active.src : undefined}
-                    poster={active.poster}
+                    poster={canLoadVideo ? active.poster : undefined}
                     muted={muted}
                     playsInline
                     autoPlay

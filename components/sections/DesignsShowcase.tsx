@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import useIsMobile from "@/components/perf/useIsMobile";
 import useNearViewport from "@/components/perf/useNearViewport";
+import useAfterFirstPaint from "@/components/perf/useAfterFirstPaint";
+import useSiteLoaded from "@/components/perf/useSiteLoaded";
 
 type DesignItem = {
   title: string;
@@ -50,7 +52,6 @@ function ControlButton({
       onClick={onClick}
       aria-label={label}
       aria-pressed={pressed}
-      data-player-control
       className="group relative grid size-12 place-items-center rounded-full bg-black/35 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/45 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
       style={{
         boxShadow: "0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)",
@@ -84,14 +85,27 @@ export default function DesignsShowcase() {
 
   const rootRef = useRef<HTMLElement | null>(null);
   const isSmallScreen = useIsMobile(768);
-  const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "600px 0px" });
-  const canLoadVideo = !isSmallScreen || near;
+  const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "200px 0px" });
+  const siteLoaded = useSiteLoaded();
+  const afterFirstPaint = useAfterFirstPaint();
+  const [activated, setActivated] = useState(false);
+
+  useEffect(() => {
+    if (activated) return;
+    if (siteLoaded && afterFirstPaint && near) setActivated(true);
+  }, [activated, afterFirstPaint, near, siteLoaded]);
+
+  const canLoadVideo = activated;
 
   const designs: DesignItem[] = useMemo(
     () => [
-      { title: "brandbook draft", src: "/mobile_images/brandbook draft.mp4", poster: "/images/titleimage.png" }
+      {
+        title: "brandbook draft",
+        src: "/mobile_images/brandbook draft.mp4",
+        poster: isSmallScreen ? "/images/titleimage-1200.webp" : "/images/titleimage-1920.webp",
+      }
     ],
-    []
+    [isSmallScreen]
   );
 
   const [muted, setMuted] = useState(true);
@@ -181,11 +195,10 @@ export default function DesignsShowcase() {
   }, [firstDesign?.src, muted, canLoadVideo]);
 
   useEffect(() => {
-    if (!isSmallScreen) return;
     const v = videoRef.current;
     if (!v) return;
     if (!near) v.pause();
-  }, [isSmallScreen, near]);
+  }, [near]);
 
   const toggleMute = () => setMuted((m) => !m);
 
@@ -372,7 +385,7 @@ export default function DesignsShowcase() {
                             ref={videoRef}
                             src={canLoadVideo ? encodeURI(firstDesign.src) : undefined}
                             aria-label={firstDesign.title}
-                            poster={firstDesign.poster}
+                            poster={canLoadVideo ? firstDesign.poster : undefined}
                             muted={muted}
                             autoPlay
                             loop

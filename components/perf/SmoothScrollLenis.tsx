@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import Lenis from "lenis";
 
 type SmoothScrollLenisProps = {
   enabled: boolean;
@@ -16,21 +15,32 @@ export default function SmoothScrollLenis({ enabled }: SmoothScrollLenisProps) {
       window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
     if (prefersReducedMotion) return;
 
-    const lenis = new Lenis({
-      duration: 1.05,
-      smoothWheel: true,
-    });
-
+    let cancelled = false;
     let rafId = 0;
-    const raf = (time: number) => {
-      lenis.raf(time);
+    let lenis: { raf: (t: number) => void; destroy: () => void } | null = null;
+
+    (async () => {
+      const mod = await import("lenis");
+      if (cancelled) return;
+
+      const Lenis = mod.default;
+      lenis = new Lenis({
+        duration: 1.05,
+        smoothWheel: true,
+      });
+
+      const raf = (time: number) => {
+        lenis?.raf(time);
+        rafId = window.requestAnimationFrame(raf);
+      };
       rafId = window.requestAnimationFrame(raf);
-    };
-    rafId = window.requestAnimationFrame(raf);
+    })();
 
     return () => {
+      cancelled = true;
       window.cancelAnimationFrame(rafId);
-      lenis.destroy();
+      lenis?.destroy();
+      lenis = null;
     };
   }, [enabled]);
 
