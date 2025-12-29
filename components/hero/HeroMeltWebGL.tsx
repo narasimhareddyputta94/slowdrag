@@ -846,7 +846,6 @@ export default function HeroMeltWebGL({
     let cancelled = false;
     let started = false;
     let cleanup: (() => void) | undefined;
-    let timeoutId: number | undefined;
     let idleId: number | undefined;
 
     const start = () => {
@@ -1044,7 +1043,7 @@ export default function HeroMeltWebGL({
     const startNow = () => {
       if (cancelled || started) return;
       if (idleId !== undefined && typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
-      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      window.clearTimeout(timeoutId);
       start();
     };
 
@@ -1055,24 +1054,11 @@ export default function HeroMeltWebGL({
     window.addEventListener("keydown", startNow, { passive: true, once: true });
 
     // PSI/Lighthouse measures main-thread work during the initial load window.
-    // On small screens, the WebGL loop can dominate TBT even though it doesn't
-    // affect the initial static hero/LCP. So we only auto-start on larger
-    // screens; on mobile we start on first interaction (scroll/touch/etc).
-    const shouldAutoStart = !isSmallScreen;
-
-    if (shouldAutoStart) {
-      const idleTimeout = 900;
-      const fallbackDelay = 160;
-
-      if (typeof w.requestIdleCallback === "function") {
-        idleId = w.requestIdleCallback(start, { timeout: idleTimeout });
-      } else {
-        timeoutId = window.setTimeout(start, fallbackDelay);
-      }
-    } else {
-      // Fallback: if the user never interacts, start later.
-      timeoutId = window.setTimeout(start, 8000);
-    }
+    // The WebGL init + continuous RAF loop can dominate TBT even though the
+    // initial static hero/LCP is covered by the poster. To protect desktop TBT
+    // (and keep mobile stable), we primarily start on first interaction.
+    // Fallback: if the user never interacts, start later.
+    const timeoutId = window.setTimeout(start, 8000);
 
     return () => {
       cancelled = true;
@@ -1083,7 +1069,7 @@ export default function HeroMeltWebGL({
 
       const w = window as unknown as { cancelIdleCallback?: (id: number) => void };
       if (idleId !== undefined && typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
-      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      window.clearTimeout(timeoutId);
       cleanup?.();
     };
   }, [imageSrc, shaders]);
