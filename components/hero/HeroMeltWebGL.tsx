@@ -1054,13 +1054,24 @@ export default function HeroMeltWebGL({
     window.addEventListener("touchstart", startNow, { passive: true, once: true });
     window.addEventListener("keydown", startNow, { passive: true, once: true });
 
-    const idleTimeout = isSmallScreen ? 1500 : 900;
-    const fallbackDelay = isSmallScreen ? 450 : 160;
+    // PSI/Lighthouse measures main-thread work during the initial load window.
+    // On small screens, the WebGL loop can dominate TBT even though it doesn't
+    // affect the initial static hero/LCP. So we only auto-start on larger
+    // screens; on mobile we start on first interaction (scroll/touch/etc).
+    const shouldAutoStart = !isSmallScreen;
 
-    if (typeof w.requestIdleCallback === "function") {
-      idleId = w.requestIdleCallback(start, { timeout: idleTimeout });
+    if (shouldAutoStart) {
+      const idleTimeout = 900;
+      const fallbackDelay = 160;
+
+      if (typeof w.requestIdleCallback === "function") {
+        idleId = w.requestIdleCallback(start, { timeout: idleTimeout });
+      } else {
+        timeoutId = window.setTimeout(start, fallbackDelay);
+      }
     } else {
-      timeoutId = window.setTimeout(start, fallbackDelay);
+      // Fallback: if the user never interacts, start later.
+      timeoutId = window.setTimeout(start, 8000);
     }
 
     return () => {
