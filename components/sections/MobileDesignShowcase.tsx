@@ -12,14 +12,6 @@ type FilmItem = {
   poster?: string;
 };
 
-function formatTime(totalSeconds: number) {
-  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "0:00";
-  const clamped = Math.max(0, Math.floor(totalSeconds));
-  const minutes = Math.floor(clamped / 60);
-  const seconds = clamped % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
 function PlayIcon({ color, size = 24 }: { color: string; size?: number }) {
   return (
     <svg
@@ -128,8 +120,6 @@ export default function MobileDesignShowcase() {
   const [autoplayArmed, setAutoplayArmed] = useState(true);
   const [controlsShown, setControlsShown] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const pipSupported = typeof document !== "undefined" && document.pictureInPictureEnabled === true;
@@ -232,26 +222,7 @@ export default function MobileDesignShowcase() {
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-
-    const onLoadedMetadata = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
-    const onTimeUpdate = () => setCurrentTime(v.currentTime || 0);
-    const onDurationChange = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
-
-    v.addEventListener("loadedmetadata", onLoadedMetadata);
-    v.addEventListener("timeupdate", onTimeUpdate);
-    v.addEventListener("durationchange", onDurationChange);
-    onLoadedMetadata();
-    onTimeUpdate();
-
-    return () => {
-      v.removeEventListener("loadedmetadata", onLoadedMetadata);
-      v.removeEventListener("timeupdate", onTimeUpdate);
-      v.removeEventListener("durationchange", onDurationChange);
-    };
-  }, [canAttachVideoSrc]);
+  // Duration/time tracking was only used for the mobile seek/progress UI.
 
   const toggleMute = () => setMuted((m) => !m);
 
@@ -293,16 +264,7 @@ export default function MobileDesignShowcase() {
     }
   };
 
-  const seekTo = (nextTime: number) => {
-    const v = videoRef.current;
-    if (!v) return;
-    try {
-      v.currentTime = Math.max(0, Math.min(nextTime, Number.isFinite(v.duration) ? v.duration : nextTime));
-      setCurrentTime(v.currentTime || 0);
-    } catch {
-      // ignore
-    }
-  };
+  // Seek was only used for the mobile seek/progress UI.
 
   const togglePlay = () => {
     const v = videoRef.current;

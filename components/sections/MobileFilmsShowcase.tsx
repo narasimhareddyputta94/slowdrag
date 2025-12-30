@@ -12,14 +12,6 @@ type FilmItem = {
   poster?: string;
 };
 
-function formatTime(totalSeconds: number) {
-  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "0:00";
-  const s = Math.floor(totalSeconds);
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return `${m}:${String(r).padStart(2, "0")}`;
-}
-
 function PlayIcon({ color, size = 20 }: { color: string; size?: number }) {
   return (
     <svg
@@ -130,8 +122,6 @@ export default function MobileFilmsShowcase() {
   const [controlsShown, setControlsShown] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const pipSupported =
     typeof document !== "undefined" &&
@@ -202,26 +192,7 @@ export default function MobileFilmsShowcase() {
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-
-    const onLoadedMetadata = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
-    const onTimeUpdate = () => setCurrentTime(v.currentTime || 0);
-    const onDurationChange = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
-
-    v.addEventListener("loadedmetadata", onLoadedMetadata);
-    v.addEventListener("timeupdate", onTimeUpdate);
-    v.addEventListener("durationchange", onDurationChange);
-    onLoadedMetadata();
-    onTimeUpdate();
-
-    return () => {
-      v.removeEventListener("loadedmetadata", onLoadedMetadata);
-      v.removeEventListener("timeupdate", onTimeUpdate);
-      v.removeEventListener("durationchange", onDurationChange);
-    };
-  }, [canAttachVideoSrc, activeIndex]);
+  // Duration/time tracking was only used for the mobile seek/progress UI.
 
   const toggleFullscreen = async () => {
     const v = videoRef.current as unknown as { webkitEnterFullscreen?: () => void } | null;
@@ -262,15 +233,7 @@ export default function MobileFilmsShowcase() {
     } catch {}
   };
 
-  const seekTo = (nextTime: number) => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (!Number.isFinite(nextTime)) return;
-    try {
-      v.currentTime = Math.max(0, Math.min(nextTime, Number.isFinite(v.duration) ? v.duration : nextTime));
-      setCurrentTime(v.currentTime || 0);
-    } catch {}
-  };
+  // Seek was only used for the mobile seek/progress UI.
 
   // When activeIndex changes, force reload + play from start
   useEffect(() => {
