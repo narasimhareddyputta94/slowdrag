@@ -84,14 +84,14 @@ export default function InitialLoadingOverlay({
         document.body.style.paddingRight = prevBodyPaddingRight;
 
         // Event was already dispatched when fade started.
-      }, 550);
+      }, 350);
 
       // Additional guard: if something keeps React from repainting, still restore scroll.
       goneTimer = window.setTimeout(() => {
         document.documentElement.style.overflow = prevHtmlOverflow;
         document.body.style.overflow = prevBodyOverflow;
         document.body.style.paddingRight = prevBodyPaddingRight;
-      }, 1200);
+      }, 700);
     };
 
     const maybeDismiss = () => {
@@ -142,7 +142,8 @@ export default function InitialLoadingOverlay({
     window.addEventListener("slowdrag:heroReady", onHeroReady);
 
     // Safety: never block forever if autoplay fails or load event is delayed.
-    const safetyTimer = window.setTimeout(dismiss, Math.max(6000, minVisibleMs + 4000));
+    // Reduced from 6000ms to 2500ms for faster worst-case dismissal.
+    const safetyTimer = window.setTimeout(dismiss, Math.max(2500, minVisibleMs + 1500));
 
     return () => {
       maybeDismissRef.current = null;
@@ -172,7 +173,7 @@ export default function InitialLoadingOverlay({
         background: "#000",
         overflow: "hidden",
         opacity: phase === "hide" ? 0 : 1,
-        transition: "opacity 520ms ease",
+        transition: "opacity 320ms ease-out",
         pointerEvents: phase === "hide" ? "none" : "auto",
       }}
     >

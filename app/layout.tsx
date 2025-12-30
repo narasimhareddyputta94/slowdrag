@@ -82,6 +82,23 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        {/* Preload critical hero images for faster LCP */}
+        <link
+          rel="preload"
+          as="image"
+          href="/images/titleimage-1920.webp"
+          type="image/webp"
+          media="(min-width: 769px)"
+        />
+        <link
+          rel="preload"
+          as="image"
+          href="/images/titleimage-1200.webp"
+          type="image/webp"
+          media="(max-width: 768px)"
+        />
+      </head>
       <body className={`${offbit.variable} ${offBit101.variable} antialiased`}>
         {/* Make sure these gates are NO-OP or super lightweight in production */}
         <PerfLoggerGate />
