@@ -93,7 +93,7 @@ export default function HeroShell({
       ref={containerRef}
       style={{
         height: "100svh",
-        minHeight: "100vh",
+        minHeight: "100svh",
         width: "100%",
         background: "#000",
         position: "relative",
@@ -105,7 +105,7 @@ export default function HeroShell({
           top: 0,
           width: "100%",
           height: "100svh",
-          minHeight: "100vh",
+          minHeight: "100svh",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

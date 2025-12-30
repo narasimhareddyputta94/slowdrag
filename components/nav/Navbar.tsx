@@ -59,9 +59,16 @@ export default function Navbar({
   useEffect(() => {
     if (!menuOpen) return;
     const prev = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+
+    const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
+    if (scrollbarW > 0) {
+      document.body.style.paddingRight = `${scrollbarW}px`;
+    }
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
+      document.body.style.paddingRight = prevPaddingRight;
     };
   }, [menuOpen]);
 
