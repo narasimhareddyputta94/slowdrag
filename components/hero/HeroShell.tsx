@@ -46,9 +46,23 @@ export default function HeroShell({
 
   // Load the full interactive hero after site is loaded and first paint
   useEffect(() => {
-    if (siteLoaded && afterFirstPaint && !loadFull) {
-      setLoadFull(true);
-    }
+    if (!siteLoaded || !afterFirstPaint || loadFull) return;
+
+    // Preload the module first so we never render a null hero while the chunk downloads.
+    // (Rendering null here would collapse a 100svh section -> catastrophic CLS.)
+    let cancelled = false;
+    import("./HeroMeltWebGL")
+      .then(() => {
+        if (cancelled) return;
+        setLoadFull(true);
+      })
+      .catch(() => {
+        // If preload fails, keep the shell (poster) instead of collapsing.
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [siteLoaded, afterFirstPaint, loadFull]);
 
   const posterBoxW = `min(${posterWidth}px, 88vw)`;
@@ -117,7 +131,7 @@ export default function HeroShell({
             fill
             priority
             unoptimized={posterIsSvg}
-            quality={85}
+            quality={75}
             fetchPriority="high"
             sizes="(max-width: 768px) 88vw, (max-width: 1200px) 1200px, 1920px"
             style={{

@@ -5,7 +5,11 @@ import MountWhenNearViewport from "@/components/perf/MountWhenNearViewport";
 
 const FilmsShowcaseResponsive = dynamic(
   () => import("@/components/sections/FilmsShowcaseResponsive"),
-  { ssr: false }
+  {
+    ssr: false,
+    // Critical for CLS: dynamic() renders null while chunk loads unless we provide a placeholder.
+    loading: () => <section aria-hidden className="relative w-full min-h-screen bg-black" />,
+  }
 );
 
 export default function FilmsSectionClient() {
