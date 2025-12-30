@@ -2,6 +2,7 @@ import "./globals.css";
 import { offBit101, offbit } from "./fonts";
 import type { Metadata } from "next";
 import PerfLoggerGate from "@/components/perf/PerfLoggerGate";
+import PerfDiagnosticsGate from "@/components/perf/PerfDiagnosticsGate";
 
 export const metadata: Metadata = {
   title: {
@@ -42,6 +43,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${offbit.variable} ${offBit101.variable} antialiased`}>
         <PerfLoggerGate />
+        <PerfDiagnosticsGate />
         {children}
       </body>
     </html>

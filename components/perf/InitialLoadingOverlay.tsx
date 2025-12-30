@@ -11,8 +11,14 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const dismissedOnceRef = useRef(false);
   const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
+  const heroReadyRef = useRef(false);
+  const videoStartedRef = useRef(false);
+  const mountedAtRef = useRef(0);
+  const maybeDismissRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    mountedAtRef.current = performance.now();
+
     const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevBodyOverflow = document.body.style.overflow;
 
@@ -62,6 +68,17 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
       }, 1200);
     };
 
+    const maybeDismiss = () => {
+      if (!heroReadyRef.current) return;
+
+      // Give the video a brief moment to actually begin playback.
+      // If autoplay is blocked, the safety timer still guarantees we don't hang forever.
+      const elapsed = performance.now() - mountedAtRef.current;
+      if (videoStartedRef.current || elapsed >= 900) dismiss();
+    };
+
+    maybeDismissRef.current = maybeDismiss;
+
     // After first paint, start the loader video and boot the hero.
     raf1 = requestAnimationFrame(() => {
       setVideoSrc(src);
@@ -69,13 +86,17 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
     });
 
     // Primary dismissal signal: hero is ready to be shown.
-    const onHeroReady = () => dismiss();
+    const onHeroReady = () => {
+      heroReadyRef.current = true;
+      maybeDismiss();
+    };
     window.addEventListener("slowdrag:heroReady", onHeroReady);
 
     // Safety: never block forever if autoplay fails or load event is delayed.
     const safetyTimer = window.setTimeout(dismiss, 6000);
 
     return () => {
+      maybeDismissRef.current = null;
       window.removeEventListener("slowdrag:heroReady", onHeroReady);
       if (fadeTimer !== undefined) window.clearTimeout(fadeTimer);
       if (goneTimer !== undefined) window.clearTimeout(goneTimer);
@@ -125,13 +146,25 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
         loop
         playsInline
         preload="metadata"
+        onPlaying={() => {
+          videoStartedRef.current = true;
+          maybeDismissRef.current?.();
+        }}
         onLoadedMetadata={() => {
           // Start playback only once metadata is available and we've had a paint.
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-              void videoRef.current?.play?.().catch(() => {
-                // Ignore autoplay failures; safety timer will dismiss.
-              });
+              const p = videoRef.current?.play?.();
+              if (p && typeof (p as Promise<void>).then === "function") {
+                (p as Promise<void>)
+                  .then(() => {
+                    videoStartedRef.current = true;
+                    maybeDismissRef.current?.();
+                  })
+                  .catch(() => {
+                    // Ignore autoplay failures; safety timer will dismiss.
+                  });
+              }
             });
           });
         }}

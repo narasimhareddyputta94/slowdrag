@@ -13,7 +13,6 @@ type DesignItem = {
   poster?: string;
 };
 
-type Size = { width: number; height: number };
 
 function CenterPlayButton({ onClick }: { onClick: () => void }) {
   return (
@@ -142,25 +141,6 @@ export default function DesignsShowcase() {
   const prev = () => {
     setOffset((i) => (i - 1 + designs.length) % designs.length);
   };
-
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [containerSize, setContainerSize] = useState<Size>({ width: 0, height: 0 });
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const update = () => {
-      const rect = el.getBoundingClientRect();
-      setContainerSize({ width: rect.width, height: rect.height });
-    };
-
-    update();
-    const ro = new ResizeObserver(() => update());
-    ro.observe(el);
-
-    return () => ro.disconnect();
-  }, []);
 
   const padding = 0;
 
@@ -353,7 +333,6 @@ export default function DesignsShowcase() {
 
               <foreignObject x="0" y="0" width="1000" height="600" clipPath="url(#blob-mask-design)">
                 <div
-                  ref={containerRef}
                   style={{
                     width: "100%",
                     height: "100%",

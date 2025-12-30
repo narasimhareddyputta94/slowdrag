@@ -89,6 +89,13 @@ export default function HeroMeltWebGL({
   const [showPoster, setShowPoster] = useState(true);
   const posterHideOnceRef = useRef(false);
   const heroReadyOnceRef = useRef(false);
+  const runtimeReadyRef = useRef(false);
+
+  const dispatchHeroReadyOnce = () => {
+    if (heroReadyOnceRef.current) return;
+    heroReadyOnceRef.current = true;
+    window.dispatchEvent(new Event("slowdrag:heroReady"));
+  };
 
   const siteLoaded = useSiteLoaded();
   const afterFirstPaint = useAfterFirstPaint();
@@ -182,6 +189,9 @@ export default function HeroMeltWebGL({
         window.__slowdrag_heroRafRunning = false;
         return;
       }
+
+      // Only tell the app "hero is ready" once we know the loop is actually running.
+      if (runtimeReadyRef.current) dispatchHeroReadyOnce();
 
       // ✅ Hide poster once WebGL is actually running (LCP has already happened)
       if (!posterHideOnceRef.current) {
@@ -526,12 +536,6 @@ export default function HeroMeltWebGL({
       cancelIdleCallback?: (id: number) => void;
     };
 
-    const dispatchHeroReadyOnce = () => {
-      if (heroReadyOnceRef.current) return;
-      heroReadyOnceRef.current = true;
-      window.dispatchEvent(new Event("slowdrag:heroReady"));
-    };
-
     const startNow = () => {
       if (cancelled || started) return;
 
@@ -555,7 +559,9 @@ export default function HeroMeltWebGL({
           imageSrc,
           state: S.current,
           getLoop: () => loopRef.current,
-          onHeroReady: dispatchHeroReadyOnce,
+          onHeroReady: () => {
+            runtimeReadyRef.current = true;
+          },
         });
       })();
     };
