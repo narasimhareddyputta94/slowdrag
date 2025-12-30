@@ -33,7 +33,7 @@ const offBit101 = localFont({
     "Courier New",
     "monospace",
   ],
-  adjustFontFallback: "Arial",
+  adjustFontFallback: "Times New Roman",
 });
 
 const offbit = offBit;

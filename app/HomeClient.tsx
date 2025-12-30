@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "@/components/nav/Navbar";
 import HeroShell from "@/components/hero/HeroShell";
 import SmoothScrollLenis from "@/components/perf/SmoothScrollLenis";
+import useIsMobile from "@/components/perf/useIsMobile";
 
 export default function HomeClient({ brandColor }: { brandColor: string }) {
   const [showNav, setShowNav] = useState(false);
@@ -12,6 +13,7 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
 
   const [smoothScrollEnabled, setSmoothScrollEnabled] = useState(false);
   const armedOnceRef = useRef(false);
+  const isMobile = useIsMobile();
 
   const handleMeltFinished = useCallback(() => {
     if (armedOnceRef.current) return;
@@ -49,13 +51,17 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
 
       <div ref={heroWrapRef}>
         <HeroShell
-          imageSrc="/images/titleimage-1920.webp"
+          imageSrc={
+            isMobile
+              ? "/images/titleimage-1200.webp"
+              : "/images/titleimage-1920.webp"
+          }
           onScrolledChange={setShowNav}
           brandColor={brandColor}
           showCaption={showNav}
           posterAlt="Slow Drag Studios"
-          posterWidth={1920}
-          posterHeight={960}
+          posterWidth={isMobile ? 1200 : 1920}
+          posterHeight={isMobile ? 600 : 960}
           onMeltFinished={handleMeltFinished}
         />
       </div>
