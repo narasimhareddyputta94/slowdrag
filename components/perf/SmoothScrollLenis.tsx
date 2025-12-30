@@ -71,11 +71,10 @@ export default function SmoothScrollLenis({ enabled }: SmoothScrollLenisProps) {
     window.addEventListener("keydown", onInteract, { passive: true, once: true });
 
     // Idle fallback for non-interaction sessions (Lighthouse typically doesn't interact)
-    // Reduced from 2500ms to 1500ms for faster smooth scroll activation
     if (typeof w.requestIdleCallback === "function") {
-      idleId = w.requestIdleCallback(() => start(), { timeout: 1500 });
+      idleId = w.requestIdleCallback(() => start(), { timeout: 2500 });
     } else {
-      timeoutId = window.setTimeout(() => start(), 1500);
+      timeoutId = window.setTimeout(() => start(), 2500);
     }
 
     return () => {
