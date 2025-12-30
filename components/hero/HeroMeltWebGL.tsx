@@ -156,6 +156,7 @@ export default function HeroMeltWebGL({
     lastLayoutH: 0,
     scrollY: 0,
     virtualScroll: 0,
+    virtualScrollTarget: 0,
     // Cache the intended lock distance so it doesn't change mid-gesture
     // (mobile address-bar show/hide can change innerHeight and prematurely finish the melt).
     lockDistance: 0,
@@ -188,11 +189,9 @@ export default function HeroMeltWebGL({
     htmlOverflow: string;
     bodyOverflow: string;
     overscrollY: string;
-    bodyPosition: string;
-    bodyTop: string;
-    bodyLeft: string;
-    bodyRight: string;
-    bodyWidth: string;
+    htmlTouchAction: string;
+    bodyTouchAction: string;
+    bodyOverscrollY: string;
   }>(null);
 
   const lockBody = (scrollY: number) => {
@@ -205,22 +204,17 @@ export default function HeroMeltWebGL({
       htmlOverflow: html.style.overflow,
       bodyOverflow: body.style.overflow,
       overscrollY: html.style.overscrollBehaviorY,
-      bodyPosition: body.style.position,
-      bodyTop: body.style.top,
-      bodyLeft: body.style.left,
-      bodyRight: body.style.right,
-      bodyWidth: body.style.width,
+      htmlTouchAction: html.style.touchAction,
+      bodyTouchAction: body.style.touchAction,
+      bodyOverscrollY: body.style.overscrollBehaviorY,
     };
 
     html.style.overflow = "hidden";
     html.style.overscrollBehaviorY = "none";
+    html.style.touchAction = "none";
     body.style.overflow = "hidden";
-
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
+    body.style.overscrollBehaviorY = "none";
+    body.style.touchAction = "none";
   };
 
   const unlockBody = () => {
@@ -233,13 +227,12 @@ export default function HeroMeltWebGL({
 
     html.style.overflow = snap.htmlOverflow;
     html.style.overscrollBehaviorY = snap.overscrollY;
+    html.style.touchAction = snap.htmlTouchAction;
     body.style.overflow = snap.bodyOverflow;
-    body.style.position = snap.bodyPosition;
-    body.style.top = snap.bodyTop;
-    body.style.left = snap.bodyLeft;
-    body.style.right = snap.bodyRight;
-    body.style.width = snap.bodyWidth;
+    body.style.overscrollBehaviorY = snap.bodyOverscrollY;
+    body.style.touchAction = snap.bodyTouchAction;
 
+    // Keep a consistent restoration point in case something external changed scroll.
     window.scrollTo(0, snap.scrollY);
   };
 
@@ -318,12 +311,21 @@ export default function HeroMeltWebGL({
       if (s.introAutoplay && !s.lockDone) {
         const unlockAt = Math.max(0, Math.min(1, s.introUnlockAt || 0.5));
         const targetVirtual = lockDistance * unlockAt;
-        if (s.virtualScroll < targetVirtual - 0.5) {
+        if (s.virtualScrollTarget < targetVirtual - 0.5) {
           const secondsToHalf = 2.4;
           const speed = targetVirtual / Math.max(0.3, secondsToHalf);
-          s.virtualScroll = Math.min(targetVirtual, s.virtualScroll + speed * dt);
-          if (s.virtualScroll > 0.5) s.hasEverMelted = true;
+          s.virtualScrollTarget = Math.min(targetVirtual, s.virtualScrollTarget + speed * dt);
+          // Keep the actual value in sync so the intro feels deterministic.
+          s.virtualScroll = Math.min(s.virtualScrollTarget, s.virtualScroll + speed * dt);
+          if (s.virtualScrollTarget > 0.5) s.hasEverMelted = true;
         }
+      }
+
+      // Smooth the “virtual scroll” to feel premium (wheel/trackpad bursts → butter).
+      // We drive `virtualScrollTarget` from input and ease the actual value toward it.
+      if (!s.lockDone) {
+        const ease = 1.0 - Math.exp(-dt * 14.0);
+        s.virtualScroll += (s.virtualScrollTarget - s.virtualScroll) * ease;
       }
 
       const raw = s.lockDone ? 1.0 : Math.max(0, Math.min(1.0, s.virtualScroll / Math.max(1, lockDistance)));
@@ -431,7 +433,14 @@ export default function HeroMeltWebGL({
 
       // If the user hasn't started the melt (no wheel/touch input), render a stable first frame
       // then freeze to avoid a continuous RAF/WebGL loop during Lighthouse.
-      if (!s.hasEverMelted && !s.lockActive && !s.lockDone && s.virtualScroll <= 0.5 && !s.introAutoplay) {
+      if (
+        !s.hasEverMelted &&
+        !s.lockActive &&
+        !s.lockDone &&
+        s.virtualScroll <= 0.5 &&
+        s.virtualScrollTarget <= 0.5 &&
+        !s.introAutoplay
+      ) {
         s.freeze = true;
         window.__slowdrag_heroRafRunning = false;
         return;
@@ -562,9 +571,9 @@ export default function HeroMeltWebGL({
     const applyDelta = (dy: number) => {
       const winH = (window.visualViewport?.height ?? window.innerHeight) || 900;
       const lockDistance = s.lockDistance > 0 ? s.lockDistance : winH * 1.35;
-      s.virtualScroll = Math.max(0, Math.min(lockDistance, s.virtualScroll + dy));
+      s.virtualScrollTarget = Math.max(0, Math.min(lockDistance, s.virtualScrollTarget + dy));
 
-      if (s.freeze && s.virtualScroll > 1) {
+      if (s.freeze && s.virtualScrollTarget > 1) {
         s.freeze = false;
         if (loopRef.current && s.loaded && s.pageVisible && s.inView) {
           cancelAnimationFrame(s.raf);
@@ -773,6 +782,7 @@ export default function HeroMeltWebGL({
         width: "100%",
         background: "#000",
         position: "relative",
+        overflowX: "clip",
       }}
     >
       <div
@@ -919,10 +929,8 @@ export default function HeroMeltWebGL({
 
         <div
           style={{
-            width: "100%",
-            height: "100%",
-            maxWidth: "2000px",
-            margin: "0 auto",
+            position: "absolute",
+            inset: 0,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

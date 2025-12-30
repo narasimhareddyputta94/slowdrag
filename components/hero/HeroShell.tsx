@@ -105,8 +105,25 @@ export default function HeroShell({
         width: "100%",
         background: "#000",
         position: "relative",
+        overflowX: "clip",
       }}
     >
+      {/* SEO: h1 for page title - visually hidden but crawlable */}
+      <h1
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: "hidden",
+          clip: "rect(0, 0, 0, 0)",
+          whiteSpace: "nowrap",
+          border: 0,
+        }}
+      >
+        Slow Drag Studios — Film and Design Studio
+      </h1>
       <div
         style={{
           position: "sticky",
@@ -141,7 +158,9 @@ export default function HeroShell({
             unoptimized={posterIsSvg}
             quality={75}
             fetchPriority="high"
-            sizes="(max-width: 768px) 88vw, (max-width: 1200px) 1200px, 1920px"
+            // Optimized sizes: 88vw on mobile (capped at 768px), 
+            // 1200px on tablets, 1920px on desktop
+            sizes="(max-width: 480px) 420px, (max-width: 768px) 88vw, (max-width: 1200px) 1200px, 1920px"
             style={{
               objectFit: "contain",
               filter: "contrast(1.02) saturate(1.02)",

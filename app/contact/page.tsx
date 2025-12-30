@@ -38,6 +38,22 @@ export default function ContactPage() {
 
   return (
     <main className="contact-page" style={{ background: "#000", color: "#fff" }}>
+      {/* SEO: h1 for page title - visually hidden but crawlable */}
+      <h1
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: "hidden",
+          clip: "rect(0, 0, 0, 0)",
+          whiteSpace: "nowrap",
+          border: 0,
+        }}
+      >
+        Contact Slow Drag Studios
+      </h1>
       <Navbar
         logoSrc="/images/logo.png"
         logoAltSrc="/images/fulllogo.png"

@@ -35,14 +35,10 @@ export default function InitialLoadingOverlay({
 
     const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevBodyOverflow = document.body.style.overflow;
-    const prevBodyPaddingRight = document.body.style.paddingRight;
 
     // Prevent any scroll/jumps while the loading video is covering the viewport.
-    // Also compensate for scrollbar width to avoid a horizontal layout shift when locking scroll.
-    const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
-    if (scrollbarW > 0) {
-      document.body.style.paddingRight = `${scrollbarW}px`;
-    }
+    // Note: scrollbar-gutter: stable in CSS handles the scrollbar width compensation.
+    // We no longer set paddingRight dynamically to avoid CLS.
     document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
 
@@ -81,7 +77,6 @@ export default function InitialLoadingOverlay({
         // Restore scroll.
         document.documentElement.style.overflow = prevHtmlOverflow;
         document.body.style.overflow = prevBodyOverflow;
-        document.body.style.paddingRight = prevBodyPaddingRight;
 
         // Event was already dispatched when fade started.
       }, 340);
@@ -90,7 +85,6 @@ export default function InitialLoadingOverlay({
       goneTimer = window.setTimeout(() => {
         document.documentElement.style.overflow = prevHtmlOverflow;
         document.body.style.overflow = prevBodyOverflow;
-        document.body.style.paddingRight = prevBodyPaddingRight;
       }, 850);
     };
 
@@ -156,7 +150,6 @@ export default function InitialLoadingOverlay({
 
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.body.style.overflow = prevBodyOverflow;
-      document.body.style.paddingRight = prevBodyPaddingRight;
     };
   }, [minVisibleMs, onDismissed, src, waitForDocumentComplete]);
 

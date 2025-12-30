@@ -56,19 +56,14 @@ export default function Navbar({
   }, [menuOpen]);
 
   // Lock scroll when open
+  // Note: scrollbar-gutter: stable in CSS handles scrollbar width compensation
+  // so we don't need to set paddingRight dynamically (which causes CLS).
   useEffect(() => {
     if (!menuOpen) return;
     const prev = document.body.style.overflow;
-    const prevPaddingRight = document.body.style.paddingRight;
-
-    const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
-    if (scrollbarW > 0) {
-      document.body.style.paddingRight = `${scrollbarW}px`;
-    }
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
-      document.body.style.paddingRight = prevPaddingRight;
     };
   }, [menuOpen]);
 

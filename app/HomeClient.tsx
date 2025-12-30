@@ -12,7 +12,8 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
   const [heroInView, setHeroInView] = useState(true);
   const heroWrapRef = useRef<HTMLDivElement | null>(null);
 
-  const [smoothScrollEnabled, setSmoothScrollEnabled] = useState(false);
+  // Enable smooth scroll immediately (not waiting for melt to finish)
+  const [smoothScrollEnabled, setSmoothScrollEnabled] = useState(true);
   const armedOnceRef = useRef(false);
   const isMobile = useIsMobile();
 

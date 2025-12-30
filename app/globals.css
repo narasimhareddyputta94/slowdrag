@@ -27,11 +27,10 @@ body {
 
 /* Performance: smooth rendering */
 html {
-  scroll-behavior: auto; /* Let Lenis handle smooth scroll */
+  scroll-behavior: smooth; /* CSS fallback for smooth scroll when Lenis not active */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  scrollbar-gutter: stable;
   font-synthesis: none;
 }
 

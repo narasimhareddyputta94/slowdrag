@@ -6,6 +6,11 @@ type ScrollLockProps = {
   enabled: boolean;
 };
 
+/**
+ * CLS-safe scroll lock.
+ * Uses overflow:hidden + touch-action:none instead of position:fixed.
+ * This prevents layout shift while still blocking scroll.
+ */
 export default function ScrollLock({ enabled }: ScrollLockProps) {
   useLayoutEffect(() => {
     if (!enabled) return;
@@ -14,28 +19,17 @@ export default function ScrollLock({ enabled }: ScrollLockProps) {
     const html = document.documentElement;
     const body = document.body;
 
-    const lockedScrollY = window.scrollY;
-
+    // Save previous styles
     const prevHtmlOverflow = html.style.overflow;
     const prevBodyOverflow = body.style.overflow;
     const prevOverscrollY = html.style.overscrollBehaviorY;
+    const prevTouchAction = body.style.touchAction;
 
-    const prevBodyPosition = body.style.position;
-    const prevBodyTop = body.style.top;
-    const prevBodyLeft = body.style.left;
-    const prevBodyRight = body.style.right;
-    const prevBodyWidth = body.style.width;
-
+    // Block scrolling without repositioning body (avoids CLS)
     html.style.overflow = "hidden";
     body.style.overflow = "hidden";
     html.style.overscrollBehaviorY = "none";
-
-    // Hard lock: fixes trackpad momentum + space/pgdown + scrollbar jumps.
-    body.style.position = "fixed";
-    body.style.top = `-${lockedScrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
+    body.style.touchAction = "none";
 
     const preventKeys = new Set([
       "ArrowUp",
@@ -71,15 +65,7 @@ export default function ScrollLock({ enabled }: ScrollLockProps) {
       html.style.overflow = prevHtmlOverflow;
       body.style.overflow = prevBodyOverflow;
       html.style.overscrollBehaviorY = prevOverscrollY;
-
-      body.style.position = prevBodyPosition;
-      body.style.top = prevBodyTop;
-      body.style.left = prevBodyLeft;
-      body.style.right = prevBodyRight;
-      body.style.width = prevBodyWidth;
-
-      // Restore scroll position after unlocking.
-      window.scrollTo(0, lockedScrollY);
+      body.style.touchAction = prevTouchAction;
     };
   }, [enabled]);
 
