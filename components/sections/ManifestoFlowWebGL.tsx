@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
-import useIsMobile from "@/components/perf/useIsMobile";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 type ManifestoFlowWebGLProps = {
   /** Same color used by the hero melt animation */
@@ -10,7 +9,6 @@ type ManifestoFlowWebGLProps = {
   armed?: boolean;
 };
 
-// Keep the text exactly as-is (line breaks matter).
 const MANIFESTO_LINES = [
   "SLOW DRAG STUDIOS IS A CREATIVE DESIGN",
   "AND FILM STUDIO BUILT AGAINST HASTE. OUR",
@@ -26,21 +24,96 @@ export default function ManifestoFlowWebGL({
   brandColor = "#c6376c",
   armed = false,
 }: ManifestoFlowWebGLProps) {
-  const isMobile = useIsMobile(768);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [hasEnteredViewOnce, setHasEnteredViewOnce] = useState(false);
+  const [animate, setAnimate] = useState(false);
 
-  const prefersReducedMotion = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+  useEffect(() => {
+    const mql = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!mql) return;
+
+    const apply = () => setPrefersReducedMotion(mql.matches);
+    apply();
+
+    if (typeof mql.addEventListener === "function") {
+      mql.addEventListener("change", apply);
+      return () => mql.removeEventListener("change", apply);
+    }
+
+    // Legacy Safari
+    mql.addListener(apply);
+    return () => mql.removeListener(apply);
   }, []);
 
-  const play = armed || prefersReducedMotion;
+  // Trigger once when the section enters the viewport.
+  useEffect(() => {
+    if (hasEnteredViewOnce) return;
+    if (prefersReducedMotion) return;
 
-  // Top->bottom line reveal in ~3s total.
-  const staggerSeconds = 0.3;
-  const lineFadeSeconds = 0.6;
+    const el = sectionRef.current;
+    if (!el) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      setHasEnteredViewOnce(true);
+      return;
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const hit = entries[0]?.isIntersecting ?? false;
+        if (!hit) return;
+        setHasEnteredViewOnce(true);
+        io.disconnect();
+      },
+      { threshold: 0.2 }
+    );
+
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasEnteredViewOnce, prefersReducedMotion]);
+
+  // Start ONLY when the section enters the viewport.
+  // (Keep `armed` prop for API compatibility; it's not used for the trigger.)
+  const shouldStart = prefersReducedMotion || hasEnteredViewOnce;
+
+  // Two-phase start: ensure one paint in the hidden state, then begin animation.
+  useEffect(() => {
+    if (animate) return;
+    if (!shouldStart) return;
+
+    if (prefersReducedMotion) {
+      setAnimate(true);
+      return;
+    }
+
+    // IMPORTANT: rAF callbacks run *before* paint. A single rAF can flip state
+    // before the initial hidden frame ever paints, which makes the transition
+    // appear to do nothing. Double-rAF guarantees one painted hidden frame.
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(() => setAnimate(true));
+    });
+
+    return () => {
+      if (raf1) window.cancelAnimationFrame(raf1);
+      if (raf2) window.cancelAnimationFrame(raf2);
+    };
+  }, [animate, prefersReducedMotion, shouldStart]);
+
+  const play = prefersReducedMotion ? true : animate;
+
+  // Total reveal window must be exactly 4.0s (first line start -> last line end).
+  const totalSeconds = 4;
+  const lineFadeSeconds = prefersReducedMotion ? 0.5 : 0.9;
+  const staggerSeconds = useMemo(() => {
+    return (totalSeconds - lineFadeSeconds) / Math.max(1, MANIFESTO_LINES.length - 1);
+  }, [lineFadeSeconds]);
 
   return (
     <section
+      ref={sectionRef}
       aria-label="Manifesto"
       style={{
         minHeight: "70vh",
@@ -69,63 +142,52 @@ export default function ManifestoFlowWebGL({
             "drop-shadow(0 0 10px rgb(255 255 255 / 0.08)) drop-shadow(0 0 20px rgb(0 0 0 / 0.45))",
         }}
       >
-        {isMobile ? (
-          <p
-            className={play ? "mf-paragraph mf-paragraph--play" : "mf-paragraph"}
+        {MANIFESTO_LINES.map((line, i) => (
+          <div
+            key={line}
+            className="mf-line"
             style={{
-              margin: 0,
-              opacity: prefersReducedMotion ? 1 : 0,
-              animationDuration: "3s",
+              opacity: 0,
+              transform: prefersReducedMotion ? "none" : "translate3d(0, 12px, 0)",
+              animationName: play ? (prefersReducedMotion ? "mf-fade-in-opacity" : "mf-fade-in") : "none",
+              animationDuration: play ? `${lineFadeSeconds}s` : "0s",
+              animationTimingFunction: prefersReducedMotion ? "linear" : "cubic-bezier(0.22, 1, 0.36, 1)",
+              animationFillMode: play ? "forwards" : "none",
+              animationDelay: play ? `${(i * staggerSeconds).toFixed(3)}s` : "0s",
+              willChange: prefersReducedMotion ? undefined : "opacity, transform",
             }}
           >
-            {MANIFESTO_LINES.join(" ")}
-          </p>
-        ) : (
-          MANIFESTO_LINES.map((line, i) => (
-            <div
-              key={line}
-              className={play ? "mf-line mf-line--play" : "mf-line"}
-              style={{
-                opacity: prefersReducedMotion ? 1 : 0,
-                animationDelay: `${(prefersReducedMotion ? 0 : i * staggerSeconds).toFixed(3)}s`,
-                animationDuration: `${lineFadeSeconds}s`,
-              }}
-            >
-              {line}
-            </div>
-          ))
-        )}
+            {line}
+          </div>
+        ))}
       </div>
 
       <style>{`
         .mf-line {
-          opacity: 0;
+          /* Transition handled inline to avoid any initial flash and ensure deterministic timing. */
         }
-        .mf-line--play {
-          animation-name: mfFadeIn;
-          animation-timing-function: ease;
-          animation-fill-mode: forwards;
+
+        @keyframes mf-fade-in {
+          0% {
+            opacity: 0;
+            transform: translate3d(0, 12px, 0);
+          }
+          100% {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+          }
         }
-        .mf-paragraph {
-          opacity: 0;
-        }
-        .mf-paragraph--play {
-          animation-name: mfFadeIn;
-          animation-timing-function: ease;
-          animation-fill-mode: forwards;
-        }
-        @keyframes mfFadeIn {
-          from {
+        @keyframes mf-fade-in-opacity {
+          0% {
             opacity: 0;
           }
-          to {
+          100% {
             opacity: 1;
           }
         }
         @media (prefers-reduced-motion: reduce) {
           .mf-line {
-            opacity: 1 !important;
-            animation: none !important;
+            transform: none !important;
           }
         }
       `}</style>

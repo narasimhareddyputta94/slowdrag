@@ -1,15 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import Navbar from "@/components/nav/Navbar";
 import HeroShell from "@/components/hero/HeroShell";
-import MountWhenNearViewport from "@/components/perf/MountWhenNearViewport";
 import SmoothScrollLenis from "@/components/perf/SmoothScrollLenis";
-
-const ManifestoFlowWebGL = dynamic(() => import("@/components/sections/ManifestoFlowWebGL"), {
-  ssr: false,
-});
 
 export default function HomeClient({ brandColor }: { brandColor: string }) {
   const [showNav, setShowNav] = useState(false);
@@ -17,15 +11,11 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
   const heroWrapRef = useRef<HTMLDivElement | null>(null);
 
   const [smoothScrollEnabled, setSmoothScrollEnabled] = useState(false);
-
-  // Armed exactly when Hero reports “melt touched bottom / finished”
-  const [manifestoArmed, setManifestoArmed] = useState(false);
   const armedOnceRef = useRef(false);
 
   const handleMeltFinished = useCallback(() => {
     if (armedOnceRef.current) return;
     armedOnceRef.current = true;
-    setManifestoArmed(true);
     setSmoothScrollEnabled(true);
   }, []);
 
@@ -37,13 +27,6 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
       (entries) => {
         const isIntersecting = entries[0]?.isIntersecting ?? true;
         setHeroInView(isIntersecting);
-
-        // Fallback (in case WebGL fails or callback never fires):
-        // arm once when hero fully leaves view.
-        if (!isIntersecting && !armedOnceRef.current) {
-          armedOnceRef.current = true;
-          setManifestoArmed(true);
-        }
       },
       { threshold: 0 }
     );
@@ -76,18 +59,6 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
           onMeltFinished={handleMeltFinished}
         />
       </div>
-
-      <MountWhenNearViewport
-        // Reserve layout to keep CLS at 0.
-        placeholder={
-          <section
-            style={{ minHeight: "70vh", background: "#000" }}
-          />
-        }
-        rootMargin="0px"
-      >
-        <ManifestoFlowWebGL brandColor={brandColor} armed={manifestoArmed} />
-      </MountWhenNearViewport>
     </>
   );
 }
