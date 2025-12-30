@@ -670,9 +670,9 @@ export default function HeroMeltWebGL({
             fill
             priority
             unoptimized={posterIsSvg}
-            quality={80}
+            quality={85}
             fetchPriority="high"
-            sizes="(max-width: 768px) 88vw, 1200px"
+            sizes="(max-width: 768px) 88vw, (max-width: 1200px) 1200px, 1920px"
             style={{
               objectFit: "contain",
               opacity: showPoster ? 1 : 0,

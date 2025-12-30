@@ -62,13 +62,11 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
       }, 1200);
     };
 
-    // After at least one paint, start the loader video and boot the hero.
-    raf1 = requestAnimationFrame(() =>
-      (raf2 = requestAnimationFrame(() => {
-        setVideoSrc(src);
-        dispatchSiteLoadedOnce();
-      }))
-    );
+    // After first paint, start the loader video and boot the hero.
+    raf1 = requestAnimationFrame(() => {
+      setVideoSrc(src);
+      dispatchSiteLoadedOnce();
+    });
 
     // Primary dismissal signal: hero is ready to be shown.
     const onHeroReady = () => dismiss();

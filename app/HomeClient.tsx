@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Navbar from "@/components/nav/Navbar";
-import HeroMeltWebGL from "@/components/hero/HeroMeltWebGL";
+import HeroShell from "@/components/hero/HeroShell";
 import MountWhenNearViewport from "@/components/perf/MountWhenNearViewport";
 import SmoothScrollLenis from "@/components/perf/SmoothScrollLenis";
 
@@ -65,14 +65,14 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
       />
 
       <div ref={heroWrapRef}>
-        <HeroMeltWebGL
-          imageSrc="/images/titleimage.svg"
+        <HeroShell
+          imageSrc="/images/titleimage-1920.webp"
           onScrolledChange={setShowNav}
           brandColor={brandColor}
           showCaption={showNav}
           posterAlt="Slow Drag Studios"
-          posterWidth={1200}
-          posterHeight={600}
+          posterWidth={1920}
+          posterHeight={960}
           onMeltFinished={handleMeltFinished}
         />
       </div>
