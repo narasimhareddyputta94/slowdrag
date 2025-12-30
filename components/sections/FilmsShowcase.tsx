@@ -56,15 +56,15 @@ function ControlButton({
       }}
     >
       <span
-        aria-hidden
+        aria-hidden="true"
         className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
       />
       <span
-        aria-hidden
+        aria-hidden="true"
         className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80"
       />
       <span
-        aria-hidden
+        aria-hidden="true"
         className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md"
       />
       <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.05]">
@@ -367,7 +367,10 @@ export default function FilmsShowcase() {
                       opacity: videoOpacity,
                       transition: "opacity 280ms ease",
                     }}
-                  />
+                  >
+                    {/* Empty track for accessibility - video is muted/decorative */}
+                    <track kind="captions" />
+                  </video>
                 ) : (
                   <div
                     style={{

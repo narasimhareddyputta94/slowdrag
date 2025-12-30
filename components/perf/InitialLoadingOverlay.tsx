@@ -218,7 +218,10 @@ export default function InitialLoadingOverlay({
             });
           });
         }}
-      />
+      >
+        {/* Empty track for accessibility - video is muted/decorative */}
+        <track kind="captions" />
+      </video>
     </div>
   );
 }

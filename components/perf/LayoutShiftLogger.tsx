@@ -122,7 +122,7 @@ export default function LayoutShiftLogger({ enabled = false }: LayoutShiftLogger
 
   return (
     <pre
-      aria-hidden
+      aria-hidden="true"
       style={{
         position: "fixed",
         left: 10,

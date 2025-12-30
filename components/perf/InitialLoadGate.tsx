@@ -13,6 +13,24 @@ export default function InitialLoadGate({ loaderSrc, children }: InitialLoadGate
 
   return (
     <>
+      {/*
+        Page content is always mounted and painted (even behind the overlay)
+        so Lighthouse can detect the LCP element. The overlay covers it visually
+        with a higher z-index.
+      */}
+      <div
+        aria-hidden={!ready}
+        style={{
+          pointerEvents: ready ? "auto" : "none",
+        }}
+      >
+        {children}
+      </div>
+
+      {/*
+        Loading overlay sits on top with max z-index.
+        Once dismissed, it removes itself and reveals the page below.
+      */}
       {!ready ? (
         <InitialLoadingOverlay
           src={loaderSrc}
@@ -21,22 +39,6 @@ export default function InitialLoadGate({ loaderSrc, children }: InitialLoadGate
           onDismissed={() => setReady(true)}
         />
       ) : null}
-
-      {/*
-        Keep the page mounted behind the overlay so the hero can boot and emit
-        `slowdrag:heroReady`. We only *reveal* the page once the overlay dismisses.
-      */}
-      <div
-        aria-hidden={!ready}
-        style={{
-          opacity: ready ? 1 : 0,
-          visibility: ready ? "visible" : "hidden",
-          pointerEvents: ready ? "auto" : "none",
-          transition: "opacity 420ms ease",
-        }}
-      >
-        {children}
-      </div>
     </>
   );
 }

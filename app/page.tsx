@@ -16,7 +16,7 @@ export default function Home() {
         <HomeClient brandColor={brandColor} />
 
         <MountWhenNearViewport
-          placeholder={<section aria-hidden style={{ minHeight: "70vh", background: "#000" }} />}
+          placeholder={<section aria-hidden="true" style={{ minHeight: "70vh", background: "#000" }} />}
           rootMargin="0px"
         >
           <ManifestoFlowWebGL brandColor={brandColor} />

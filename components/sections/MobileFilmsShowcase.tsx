@@ -340,7 +340,10 @@ export default function MobileFilmsShowcase() {
                       opacity: videoOpacity,
                       transition: "opacity 280ms ease",
                     }}
-                  />
+                  >
+                    {/* Empty track for accessibility - video is muted/decorative */}
+                    <track kind="captions" />
+                  </video>
                 ) : (
                   <div
                     style={{

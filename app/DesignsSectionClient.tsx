@@ -8,14 +8,14 @@ const DesignsShowcaseResponsive = dynamic(
   {
     ssr: false,
     // Critical for CLS: dynamic() renders null while chunk loads unless we provide a placeholder.
-    loading: () => <section aria-hidden className="relative w-full min-h-screen bg-black" />,
+    loading: () => <section aria-hidden="true" className="relative w-full min-h-screen bg-black" />,
   }
 );
 
 export default function DesignsSectionClient() {
   return (
     <MountWhenNearViewport
-      placeholder={<section aria-hidden className="relative w-full min-h-screen bg-black" />}
+      placeholder={<section aria-hidden="true" className="relative w-full min-h-screen bg-black" />}
       rootMargin="150px 0px"
     >
       <DesignsShowcaseResponsive />
