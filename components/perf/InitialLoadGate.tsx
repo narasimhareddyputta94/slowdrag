@@ -34,8 +34,8 @@ export default function InitialLoadGate({ loaderSrc, children }: InitialLoadGate
       {!ready ? (
         <InitialLoadingOverlay
           src={loaderSrc}
-          minVisibleMs={2000}
-          waitForDocumentComplete
+          minVisibleMs={650}
+          waitForDocumentComplete={false}
           onDismissed={() => setReady(true)}
         />
       ) : null}

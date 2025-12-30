@@ -53,7 +53,6 @@ export type HeroMeltRuntimeState = {
   u_post: HeroMeltUniformsPost | Record<string, UniformLoc>;
   u_blit: UniformLoc;
   raf: number;
-  fixScrollRaf?: number;
   t0: number;
   seed: number;
   loaded: boolean;
@@ -677,7 +676,6 @@ export function startHeroMeltWebGL({ canvas, imageSrc, state, getLoop, onHeroRea
 
     ro.disconnect();
     cancelAnimationFrame(s.raf);
-    if (s.fixScrollRaf) cancelAnimationFrame(s.fixScrollRaf);
 
     try {
       gl.getExtension("WEBGL_lose_context")?.loseContext();

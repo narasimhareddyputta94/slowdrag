@@ -84,14 +84,14 @@ export default function InitialLoadingOverlay({
         document.body.style.paddingRight = prevBodyPaddingRight;
 
         // Event was already dispatched when fade started.
-      }, 550);
+      }, 340);
 
       // Additional guard: if something keeps React from repainting, still restore scroll.
       goneTimer = window.setTimeout(() => {
         document.documentElement.style.overflow = prevHtmlOverflow;
         document.body.style.overflow = prevBodyOverflow;
         document.body.style.paddingRight = prevBodyPaddingRight;
-      }, 1200);
+      }, 850);
     };
 
     const maybeDismiss = () => {
@@ -172,7 +172,7 @@ export default function InitialLoadingOverlay({
         background: "#000",
         overflow: "hidden",
         opacity: phase === "hide" ? 0 : 1,
-        transition: "opacity 520ms ease",
+        transition: "opacity 320ms ease",
         pointerEvents: phase === "hide" ? "none" : "auto",
       }}
     >

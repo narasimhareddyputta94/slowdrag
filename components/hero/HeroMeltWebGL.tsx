@@ -29,6 +29,11 @@ type HeroProps = {
 
   // ✅ NEW: fired once when melt reaches the end / lock finishes
   onMeltFinished?: () => void;
+
+  // ✅ Intro mode: autoplay melt while scroll is locked, then unlock at given progress
+  introAutoplay?: boolean;
+  introUnlockAt?: number;
+  onIntroUnlock?: () => void;
 };
 
 /* ---------------- Color Helpers ---------------- */
@@ -68,6 +73,9 @@ export default function HeroMeltWebGL({
   posterWidth = 1200,
   posterHeight = 600,
   onMeltFinished,
+  introAutoplay = false,
+  introUnlockAt = 0.5,
+  onIntroUnlock,
 }: HeroProps) {
   const router = useRouter();
   useEffect(() => {
@@ -82,6 +90,11 @@ export default function HeroMeltWebGL({
   useEffect(() => {
     onMeltFinishedRef.current = onMeltFinished;
   }, [onMeltFinished]);
+
+  const onIntroUnlockRef = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    onIntroUnlockRef.current = onIntroUnlock;
+  }, [onIntroUnlock]);
 
   const meltFinishedOnceRef = useRef(false);
 
@@ -160,24 +173,100 @@ export default function HeroMeltWebGL({
     manifestoArmed: false,
     manifestoProbeEvery: 0,
 
-    // ✅ Batch scroll fixing into rAF to avoid stutter
-    fixScrollRaf: 0,
-
     // Performance: pause RAF when offscreen / tab hidden
     inView: true,
     pageVisible: true,
+
+    // Intro autoplay (first visit)
+    introAutoplay: false,
+    introUnlockAt: 0.5,
+    introUnlockFired: false,
   });
 
-  const scheduleFixScroll = () => {
-    const s = S.current;
-    if (s.fixScrollRaf) return;
-    s.fixScrollRaf = window.requestAnimationFrame(() => {
-      s.fixScrollRaf = 0;
-      if (s.lockActive && !s.lockDone) {
-        window.scrollTo(0, s.lockScrollY);
-      }
-    });
+  const bodyLockRef = useRef<null | {
+    scrollY: number;
+    htmlOverflow: string;
+    bodyOverflow: string;
+    overscrollY: string;
+    bodyPosition: string;
+    bodyTop: string;
+    bodyLeft: string;
+    bodyRight: string;
+    bodyWidth: string;
+  }>(null);
+
+  const lockBody = (scrollY: number) => {
+    if (bodyLockRef.current) return;
+    const html = document.documentElement;
+    const body = document.body;
+
+    bodyLockRef.current = {
+      scrollY,
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      overscrollY: html.style.overscrollBehaviorY,
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyLeft: body.style.left,
+      bodyRight: body.style.right,
+      bodyWidth: body.style.width,
+    };
+
+    html.style.overflow = "hidden";
+    html.style.overscrollBehaviorY = "none";
+    body.style.overflow = "hidden";
+
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
   };
+
+  const unlockBody = () => {
+    const snap = bodyLockRef.current;
+    if (!snap) return;
+    bodyLockRef.current = null;
+
+    const html = document.documentElement;
+    const body = document.body;
+
+    html.style.overflow = snap.htmlOverflow;
+    html.style.overscrollBehaviorY = snap.overscrollY;
+    body.style.overflow = snap.bodyOverflow;
+    body.style.position = snap.bodyPosition;
+    body.style.top = snap.bodyTop;
+    body.style.left = snap.bodyLeft;
+    body.style.right = snap.bodyRight;
+    body.style.width = snap.bodyWidth;
+
+    window.scrollTo(0, snap.scrollY);
+  };
+
+  // Keep intro settings in sync with props.
+  useEffect(() => {
+    const s = S.current;
+    s.introAutoplay = !!introAutoplay;
+    s.introUnlockAt = Math.max(0, Math.min(1, introUnlockAt ?? 0.5));
+
+    // When intro mode ends, adjust baseline so native scroll continues seamlessly.
+    if (!s.introAutoplay) {
+      s.lockScrollY = window.scrollY - s.virtualScroll;
+    } else {
+      // Starting intro at top: baseline at current scroll
+      if (!s.lockActive && !s.lockDone) {
+        s.lockActive = true;
+        s.lockScrollY = window.scrollY;
+        const baseH = (window.visualViewport?.height ?? window.innerHeight) || 900;
+        if (!s.lockDistance) s.lockDistance = baseH * 1.35;
+      }
+    }
+  }, [introAutoplay, introUnlockAt]);
+
+  // Safety: if we ever unmount while locked, always restore scroll.
+  useEffect(() => {
+    return () => unlockBody();
+  }, []);
 
   useEffect(() => {
     loopRef.current = () => {
@@ -224,7 +313,28 @@ export default function HeroMeltWebGL({
       // the melt to reach 1.0 too early (looks like the animation "stops" mid-section).
       const lockDistance = s.lockDistance > 0 ? s.lockDistance : winH * 1.35;
 
+      // Intro autoplay: advance progress without any scroll input (first visit).
+      // Target: reach introUnlockAt in ~2.4s, smooth and deterministic.
+      if (s.introAutoplay && !s.lockDone) {
+        const unlockAt = Math.max(0, Math.min(1, s.introUnlockAt || 0.5));
+        const targetVirtual = lockDistance * unlockAt;
+        if (s.virtualScroll < targetVirtual - 0.5) {
+          const secondsToHalf = 2.4;
+          const speed = targetVirtual / Math.max(0.3, secondsToHalf);
+          s.virtualScroll = Math.min(targetVirtual, s.virtualScroll + speed * dt);
+          if (s.virtualScroll > 0.5) s.hasEverMelted = true;
+        }
+      }
+
       const raw = s.lockDone ? 1.0 : Math.max(0, Math.min(1.0, s.virtualScroll / Math.max(1, lockDistance)));
+
+      if (s.introAutoplay && !s.introUnlockFired) {
+        const unlockAt = Math.max(0, Math.min(1, s.introUnlockAt || 0.5));
+        if (raw >= unlockAt - 1e-4) {
+          s.introUnlockFired = true;
+          onIntroUnlockRef.current?.();
+        }
+      }
 
       // Map scroll progress 1:1 to the melt so it reaches the end only when the hero lock ends.
       // (Previously 1.35 caused the melt to finish early and then "stop" while scroll lock continued.)
@@ -321,7 +431,7 @@ export default function HeroMeltWebGL({
 
       // If the user hasn't started the melt (no wheel/touch input), render a stable first frame
       // then freeze to avoid a continuous RAF/WebGL loop during Lighthouse.
-      if (!s.hasEverMelted && !s.lockActive && !s.lockDone && s.virtualScroll <= 0.5) {
+      if (!s.hasEverMelted && !s.lockActive && !s.lockDone && s.virtualScroll <= 0.5 && !s.introAutoplay) {
         s.freeze = true;
         window.__slowdrag_heroRafRunning = false;
         return;
@@ -386,35 +496,38 @@ export default function HeroMeltWebGL({
 
   /* ---------------- NATIVE SCROLL LISTENER ---------------- */
   useEffect(() => {
+    const shouldPinNow = () => {
+      if (S.current.lockDone) return false;
+      const el = containerRef.current;
+      if (!el) return false;
+      const winH = (window.visualViewport?.height ?? window.innerHeight) || 900;
+      const rect = el.getBoundingClientRect();
+      return rect.top <= 0 && rect.bottom >= winH * 0.85;
+    };
+
     const onScroll = () => {
       const s = S.current;
-      if (s.lockActive && !s.lockDone) {
-        // Don’t fight the browser immediately; batch to rAF
-        scheduleFixScroll();
-        s.scrollY = s.lockScrollY;
-        return;
+
+      // If something external scrolls, keep state consistent.
+      // When we are locked, the body is fixed so scrollY shouldn't change.
+      s.scrollY = s.lockActive && !s.lockDone ? s.lockScrollY : window.scrollY;
+
+      // If the hero is no longer in the pin zone, make sure we unlock.
+      if (s.lockActive && !s.lockDone && !shouldPinNow()) {
+        s.lockActive = false;
+        unlockBody();
       }
-      s.scrollY = window.scrollY;
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Scroll-lock: intercept wheel/touch while hero is on screen.
+  // Consume wheel/touch/keys while hero is pinned, drive virtualScroll.
+  // This lets the hero section stay 100svh (no extra height) while still using “scroll to animate”.
   useEffect(() => {
+
     const s = S.current;
     let lastTouchY = 0;
-
-    let detached = false;
-    const prevOverscroll = document.documentElement.style.overscrollBehaviorY;
-    const detach = () => {
-      if (detached) return;
-      detached = true;
-      document.documentElement.style.overscrollBehaviorY = prevOverscroll;
-      window.removeEventListener("wheel", onWheel);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
-    };
 
     const shouldLockNow = () => {
       if (s.lockDone) return false;
@@ -425,93 +538,106 @@ export default function HeroMeltWebGL({
       return rect.top <= 0 && rect.bottom >= winH * 0.85;
     };
 
+    const ensureLocked = () => {
+      if (s.lockDone) return false;
+      if (!shouldLockNow()) {
+        if (s.lockActive) {
+          s.lockActive = false;
+          unlockBody();
+        }
+        return false;
+      }
+
+      if (!s.lockActive) {
+        s.lockActive = true;
+        s.lockScrollY = window.scrollY;
+        const baseH = (window.visualViewport?.height ?? window.innerHeight) || 900;
+        s.lockDistance = baseH * 1.35;
+        lockBody(s.lockScrollY);
+        lastTouchY = 0;
+      }
+      return true;
+    };
+
     const applyDelta = (dy: number) => {
       const winH = (window.visualViewport?.height ?? window.innerHeight) || 900;
       const lockDistance = s.lockDistance > 0 ? s.lockDistance : winH * 1.35;
-
       s.virtualScroll = Math.max(0, Math.min(lockDistance, s.virtualScroll + dy));
 
+      if (s.freeze && s.virtualScroll > 1) {
+        s.freeze = false;
+        if (loopRef.current && s.loaded && s.pageVisible && s.inView) {
+          cancelAnimationFrame(s.raf);
+          s.raf = requestAnimationFrame(loopRef.current);
+        }
+      }
+
       if (s.virtualScroll >= lockDistance - 1) {
-        if (!s.lockDone) {
-          s.lockDone = true;
-          s.lockActive = false;
+        s.lockDone = true;
+        s.lockActive = false;
+        s.target = 1.0;
+        s.p = 1.0;
+        s.hasEverMelted = true;
+        unlockBody();
 
-          // Ensure the melt reaches the final state exactly at the end of the lock.
-          s.target = 1.0;
-          s.p = 1.0;
-          s.hasEverMelted = true;
-
-          // Detach heavy listeners as soon as the melt is done.
-          detach();
-
-          if (!meltFinishedOnceRef.current) {
-            meltFinishedOnceRef.current = true;
-            onMeltFinishedRef.current?.();
-          }
+        if (!meltFinishedOnceRef.current) {
+          meltFinishedOnceRef.current = true;
+          onMeltFinishedRef.current?.();
         }
       }
     };
 
     const onWheel = (e: WheelEvent) => {
-      if (!shouldLockNow()) return;
-      if (!s.lockActive) {
-        s.lockActive = true;
-        s.lockScrollY = window.scrollY;
-        // Cache once per lock so the end point doesn't drift.
-        const baseH = (window.visualViewport?.height ?? window.innerHeight) || 900;
-        s.lockDistance = baseH * 1.35;
-      }
-      if (s.freeze) {
-        s.freeze = false;
-        if (loopRef.current && s.loaded && s.pageVisible) {
-          cancelAnimationFrame(s.raf);
-          s.raf = requestAnimationFrame(loopRef.current);
-        }
-      }
+      if (!ensureLocked()) return;
       e.preventDefault();
       applyDelta(e.deltaY);
-      scheduleFixScroll();
     };
 
     const onTouchStart = (e: TouchEvent) => {
-      if (shouldLockNow() && !s.lockActive) {
-        s.lockActive = true;
-        s.lockScrollY = window.scrollY;
-        const baseH = (window.visualViewport?.height ?? window.innerHeight) || 900;
-        s.lockDistance = baseH * 1.35;
-      }
+      // Establish baseline so the first move is stable.
       lastTouchY = e.touches[0]?.clientY ?? 0;
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (!shouldLockNow()) return;
-      if (!s.lockActive) {
-        s.lockActive = true;
-        s.lockScrollY = window.scrollY;
-      }
-      if (s.freeze) {
-        s.freeze = false;
-        if (loopRef.current && s.loaded && s.pageVisible) {
-          cancelAnimationFrame(s.raf);
-          s.raf = requestAnimationFrame(loopRef.current);
-        }
-      }
+      if (!ensureLocked()) return;
       const y = e.touches[0]?.clientY ?? lastTouchY;
       const dy = lastTouchY - y;
       lastTouchY = y;
       e.preventDefault();
       applyDelta(dy);
-      scheduleFixScroll();
     };
 
-    document.documentElement.style.overscrollBehaviorY = "none";
+    const preventKeys = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!preventKeys.has(e.key)) return;
+      if (!ensureLocked()) return;
+      e.preventDefault();
+      const dy = e.key === "ArrowUp" || e.key === "PageUp" ? -120 : 120;
+      applyDelta(dy);
+    };
+
+    // Keep lock state synced when user resizes / layout changes.
+    const onResize = () => {
+      if (!s.lockActive || s.lockDone) return;
+      if (!shouldLockNow()) {
+        s.lockActive = false;
+        unlockBody();
+      }
+    };
 
     window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("keydown", onKeyDown, { passive: false });
     window.addEventListener("touchstart", onTouchStart, { passive: true });
     window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("resize", onResize, { passive: true });
 
     return () => {
-      detach();
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("resize", onResize);
+      unlockBody();
     };
   }, []);
 
@@ -565,6 +691,11 @@ export default function HeroMeltWebGL({
         });
       })();
     };
+
+    // Intro autoplay needs WebGL running without any interaction.
+    if (introAutoplay) {
+      requestAnimationFrame(() => startNow());
+    }
 
     const onInteraction = () => startNow();
     window.addEventListener("pointerdown", onInteraction, { passive: true, once: true });

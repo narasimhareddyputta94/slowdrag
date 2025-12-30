@@ -22,6 +22,10 @@ type HeroShellProps = {
   posterWidth?: number;
   posterHeight?: number;
   onMeltFinished?: () => void;
+
+  introAutoplay?: boolean;
+  introUnlockAt?: number;
+  onIntroUnlock?: () => void;
 };
 
 /**
@@ -38,6 +42,9 @@ export default function HeroShell({
   posterWidth = 1920,
   posterHeight = 960,
   onMeltFinished,
+  introAutoplay = false,
+  introUnlockAt = 0.5,
+  onIntroUnlock,
 }: HeroShellProps) {
   const [loadFull, setLoadFull] = useState(false);
   const siteLoaded = useSiteLoaded();
@@ -80,6 +87,9 @@ export default function HeroShell({
         posterWidth={posterWidth}
         posterHeight={posterHeight}
         onMeltFinished={onMeltFinished}
+        introAutoplay={introAutoplay}
+        introUnlockAt={introUnlockAt}
+        onIntroUnlock={onIntroUnlock}
       >
         {children}
       </HeroMeltWebGL>
