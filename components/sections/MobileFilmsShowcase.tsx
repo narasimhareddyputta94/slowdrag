@@ -130,6 +130,7 @@ export default function MobileFilmsShowcase() {
   const autoplayDesired = userRequestedPlay || autoplayArmed;
   const canAttachVideoSrc = canLoadVideo && autoplayDesired;
   const controlsVisible = !isPlaying || controlsShown;
+  const [rotateFullscreen, setRotateFullscreen] = useState(false);
 
   // Keep track of timeouts so we can clear them (prevents "stuck" phase)
   const timeoutsRef = useRef<number[]>([]);
@@ -191,6 +192,25 @@ export default function MobileFilmsShowcase() {
     onFs();
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isFullscreen) {
+      setRotateFullscreen(false);
+      return;
+    }
+
+    const update = () => {
+      setRotateFullscreen(window.innerHeight > window.innerWidth);
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, [isFullscreen]);
 
   // Duration/time tracking was only used for the mobile seek/progress UI.
 
@@ -326,6 +346,7 @@ export default function MobileFilmsShowcase() {
   // =========================
 
   const handlePlayerPointerDown = (e: React.PointerEvent) => {
+    if (isFullscreen) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest?.("[data-player-control]")) return;
 
@@ -381,6 +402,10 @@ export default function MobileFilmsShowcase() {
     Z
   `;
 
+  const fullscreenRectPath = "M0 0H1000V600H0Z";
+  const clipPathD = isFullscreen ? fullscreenRectPath : shapePath;
+  const rotateInFullscreen = isFullscreen && rotateFullscreen;
+
   return (
     <section
       ref={rootRef as unknown as React.RefObject<HTMLElement>}
@@ -410,23 +435,33 @@ export default function MobileFilmsShowcase() {
 
           {/* Player (kept same size/shape) */}
           <div className="flex-none pt-1">
-            <div className="relative w-full aspect-[5/3]" onPointerDown={handlePlayerPointerDown} ref={playerRef}>
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -inset-5 rounded-[40px] blur-2xl opacity-25"
-                style={{
-                  background:
-                    "radial-gradient(55% 55% at 50% 48%, rgba(232,233,56,0.22), transparent 70%)",
-                }}
-              />
+            <div
+              className={isFullscreen ? "relative w-full h-full" : "relative w-full aspect-[5/3]"}
+              onPointerDown={handlePlayerPointerDown}
+              ref={playerRef}
+            >
+              {!isFullscreen ? (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -inset-5 rounded-[40px] blur-2xl opacity-25"
+                  style={{
+                    background:
+                      "radial-gradient(55% 55% at 50% 48%, rgba(232,233,56,0.22), transparent 70%)",
+                  }}
+                />
+              ) : null}
               <svg
             viewBox="0 0 1000 600"
-            className="w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] pointer-events-none"
-            preserveAspectRatio="xMidYMid meet"
+            className={
+              isFullscreen
+                ? "w-full h-full"
+                : "w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] pointer-events-none"
+            }
+            preserveAspectRatio={isFullscreen ? "none" : "xMidYMid meet"}
           >
             <defs>
               <clipPath id="blob-clip" clipPathUnits="userSpaceOnUse">
-                <path d={shapePath} />
+                <path d={clipPathD} />
               </clipPath>
 
               <radialGradient
@@ -463,7 +498,7 @@ export default function MobileFilmsShowcase() {
               </filter>
             </defs>
 
-            <path d={shapePath} fill="#0a0a0a" />
+            <path d={clipPathD} fill="#0a0a0a" />
 
             <foreignObject
               x="0"
@@ -488,6 +523,7 @@ export default function MobileFilmsShowcase() {
                     poster={canLoadVideo ? active.poster : undefined}
                     muted={muted}
                     playsInline
+                    controls={isFullscreen}
                     autoPlay={autoplayDesired}
                     preload={canAttachVideoSrc ? "metadata" : "none"}
                     onEnded={next}
@@ -504,12 +540,17 @@ export default function MobileFilmsShowcase() {
                       }
                     }}
                     style={{
-                      width: "100%",
-                      height: "100%",
                       objectFit: "cover",
                       objectPosition: "center",
                       display: "block",
-                      transform: "scale(1.34)",
+                      position: rotateInFullscreen ? "absolute" : undefined,
+                      left: rotateInFullscreen ? "50%" : undefined,
+                      top: rotateInFullscreen ? "50%" : undefined,
+                      width: rotateInFullscreen ? "100vh" : "100%",
+                      height: rotateInFullscreen ? "100vw" : "100%",
+                      transform: rotateInFullscreen
+                        ? "translate(-50%, -50%) rotate(90deg)"
+                        : "scale(1.34)",
                       transformOrigin: "center",
                       opacity: videoOpacity,
                       transition: "opacity 280ms ease",
@@ -533,16 +574,18 @@ export default function MobileFilmsShowcase() {
               </div>
             </foreignObject>
 
-            <path
-              d={shapePath}
-              fill="none"
-              stroke="rgba(255,255,255,0.15)"
-              strokeWidth="1.5"
-            />
+            {!isFullscreen ? (
+              <path
+                d={shapePath}
+                fill="none"
+                stroke="rgba(255,255,255,0.15)"
+                strokeWidth="1.5"
+              />
+            ) : null}
           </svg>
 
           {/* Center overlay play button */}
-          {!isPlaying ? (
+          {!isFullscreen && !isPlaying ? (
             <div
               data-player-control
               className="absolute z-40"
@@ -557,6 +600,7 @@ export default function MobileFilmsShowcase() {
           ) : null}
 
           {/* Controls (bottom) */}
+          {!isFullscreen ? (
           <div
             data-player-control
             className={`absolute z-40 transition-[opacity,transform] duration-200 ease-out ${
@@ -655,6 +699,7 @@ export default function MobileFilmsShowcase() {
               ) : null}
             </div>
           </div>
+          ) : null}
             </div>
           </div>
 

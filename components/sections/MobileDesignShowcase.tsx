@@ -121,6 +121,7 @@ export default function MobileDesignShowcase() {
   const [controlsShown, setControlsShown] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [rotateFullscreen, setRotateFullscreen] = useState(false);
 
   const pipSupported = typeof document !== "undefined" && document.pictureInPictureEnabled === true;
 
@@ -222,6 +223,25 @@ export default function MobileDesignShowcase() {
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isFullscreen) {
+      setRotateFullscreen(false);
+      return;
+    }
+
+    const update = () => {
+      setRotateFullscreen(window.innerHeight > window.innerWidth);
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, [isFullscreen]);
+
   // Duration/time tracking was only used for the mobile seek/progress UI.
 
   const toggleMute = () => setMuted((m) => !m);
@@ -291,6 +311,7 @@ export default function MobileDesignShowcase() {
   // =========================
 
   const handlePlayerPointerDown = (e: React.PointerEvent) => {
+    if (isFullscreen) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest?.("[data-player-control]")) return;
 
@@ -358,6 +379,10 @@ export default function MobileDesignShowcase() {
     Z
   `;
 
+  const fullscreenRectPath = "M0 0H1000V600H0Z";
+  const clipPathD = isFullscreen ? fullscreenRectPath : shapePath;
+  const rotateInFullscreen = isFullscreen && rotateFullscreen;
+
   return (
     <section
       ref={rootRef as unknown as React.RefObject<HTMLElement>}
@@ -389,25 +414,31 @@ export default function MobileDesignShowcase() {
           <div className="flex-none pt-1">
             <div
               ref={playerRef}
-              className="relative w-full aspect-[5/3]"
+              className={isFullscreen ? "relative w-full h-full" : "relative w-full aspect-[5/3]"}
               onPointerDown={handlePlayerPointerDown}
             >
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -inset-5 rounded-[40px] blur-2xl opacity-25"
-                style={{
-                  background:
-                    "radial-gradient(55% 55% at 50% 48%, rgba(232,233,56,0.22), transparent 70%)",
-                }}
-              />
+              {!isFullscreen ? (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -inset-5 rounded-[40px] blur-2xl opacity-25"
+                  style={{
+                    background:
+                      "radial-gradient(55% 55% at 50% 48%, rgba(232,233,56,0.22), transparent 70%)",
+                  }}
+                />
+              ) : null}
               <svg
             viewBox="0 0 1000 600"
-            className="w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] pointer-events-none"
-            preserveAspectRatio="xMidYMid meet"
+            className={
+              isFullscreen
+                ? "w-full h-full"
+                : "w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] pointer-events-none"
+            }
+            preserveAspectRatio={isFullscreen ? "none" : "xMidYMid meet"}
           >
             <defs>
               <clipPath id="blob-clip-design" clipPathUnits="userSpaceOnUse">
-                <path d={shapePath} />
+                <path d={clipPathD} />
               </clipPath>
 
               <radialGradient
@@ -444,7 +475,7 @@ export default function MobileDesignShowcase() {
               </filter>
             </defs>
 
-            <path d={shapePath} fill="#0a0a0a" />
+            <path d={clipPathD} fill="#0a0a0a" />
 
             <foreignObject
               x="0"
@@ -469,6 +500,7 @@ export default function MobileDesignShowcase() {
                     poster={canLoadVideo ? active.poster : undefined}
                     muted={muted}
                     playsInline
+                    controls={isFullscreen}
                     autoPlay={autoplayDesired}
                     loop
                     preload={canAttachVideoSrc ? "metadata" : "none"}
@@ -485,11 +517,16 @@ export default function MobileDesignShowcase() {
                       }
                     }}
                     style={{
-                      width: "100%",
-                      height: "100%",
+                      width: rotateInFullscreen ? "100vh" : "100%",
+                      height: rotateInFullscreen ? "100vw" : "100%",
                       objectFit: "cover",
                       objectPosition: "center",
                       display: "block",
+                      position: rotateInFullscreen ? "absolute" : undefined,
+                      left: rotateInFullscreen ? "50%" : undefined,
+                      top: rotateInFullscreen ? "50%" : undefined,
+                      transform: rotateInFullscreen ? "translate(-50%, -50%) rotate(90deg)" : undefined,
+                      transformOrigin: "center",
                       opacity: videoOpacity,
                       transition: "opacity 280ms ease",
                     }}
@@ -512,16 +549,18 @@ export default function MobileDesignShowcase() {
               </div>
             </foreignObject>
 
-            <path
-              d={shapePath}
-              fill="none"
-              stroke="rgba(255,255,255,0.15)"
-              strokeWidth="1.5"
-            />
+            {!isFullscreen ? (
+              <path
+                d={clipPathD}
+                fill="none"
+                stroke="rgba(255,255,255,0.15)"
+                strokeWidth="1.5"
+              />
+            ) : null}
           </svg>
 
           {/* Center overlay play button */}
-          {!isPlaying ? (
+          {!isFullscreen && !isPlaying ? (
             <div
               data-player-control
               className="absolute z-40"
@@ -536,62 +575,15 @@ export default function MobileDesignShowcase() {
           ) : null}
 
           {/* Bottom-right controls */}
-          <div
-            data-player-control
-            className={`absolute z-40 flex items-center gap-2 transition-[opacity,transform] duration-200 ease-out ${
-              controlsVisible ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-2 pointer-events-none"
-            }`}
-            style={{ right: "14px", bottom: "14px" }}
-          >
-            <ControlButton onClick={toggleMute} pressed={!muted} label={muted ? "Unmute video" : "Mute video"}>
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke={tealColor}
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
-              >
-                <path d="M11 5L6 9H3v6h3l5 4V5z" />
-                {muted ? (
-                  <path d="M22 9l-7 7" />
-                ) : (
-                  <>
-                    <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-                    <path d="M18.8 6.2a8.5 8.5 0 0 1 0 11.6" />
-                  </>
-                )}
-              </svg>
-            </ControlButton>
-
-            <ControlButton
-              onClick={toggleFullscreen}
-              pressed={isFullscreen}
-              label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          {!isFullscreen ? (
+            <div
+              data-player-control
+              className={`absolute z-40 flex items-center gap-2 transition-[opacity,transform] duration-200 ease-out ${
+                controlsVisible ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-2 pointer-events-none"
+              }`}
+              style={{ right: "14px", bottom: "14px" }}
             >
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke={tealColor}
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
-              >
-                <path d="M9 3H5a2 2 0 0 0-2 2v4" />
-                <path d="M15 3h4a2 2 0 0 1 2 2v4" />
-                <path d="M9 21H5a2 2 0 0 1-2-2v-4" />
-                <path d="M15 21h4a2 2 0 0 0 2-2v-4" />
-              </svg>
-            </ControlButton>
-
-            {pipSupported ? (
-              <ControlButton onClick={togglePiP} pressed={false} label="Picture in Picture">
+              <ControlButton onClick={toggleMute} pressed={!muted} label={muted ? "Unmute video" : "Mute video"}>
                 <svg
                   width="22"
                   height="22"
@@ -603,12 +595,61 @@ export default function MobileDesignShowcase() {
                   strokeLinejoin="round"
                   className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
                 >
-                  <rect x="3" y="5" width="18" height="14" rx="2" />
-                  <rect x="12.5" y="11" width="6" height="5" rx="1" />
+                  <path d="M11 5L6 9H3v6h3l5 4V5z" />
+                  {muted ? (
+                    <path d="M22 9l-7 7" />
+                  ) : (
+                    <>
+                      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                      <path d="M18.8 6.2a8.5 8.5 0 0 1 0 11.6" />
+                    </>
+                  )}
                 </svg>
               </ControlButton>
-            ) : null}
-          </div>
+
+              <ControlButton
+                onClick={toggleFullscreen}
+                pressed={isFullscreen}
+                label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              >
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={tealColor}
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+                >
+                  <path d="M9 3H5a2 2 0 0 0-2 2v4" />
+                  <path d="M15 3h4a2 2 0 0 1 2 2v4" />
+                  <path d="M9 21H5a2 2 0 0 1-2-2v-4" />
+                  <path d="M15 21h4a2 2 0 0 0 2-2v-4" />
+                </svg>
+              </ControlButton>
+
+              {pipSupported ? (
+                <ControlButton onClick={togglePiP} pressed={false} label="Picture in Picture">
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke={tealColor}
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+                  >
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <rect x="12.5" y="11" width="6" height="5" rx="1" />
+                  </svg>
+                </ControlButton>
+              ) : null}
+            </div>
+          ) : null}
 
             </div>
           </div>

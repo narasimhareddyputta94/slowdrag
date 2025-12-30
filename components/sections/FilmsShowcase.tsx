@@ -433,6 +433,9 @@ export default function FilmsShowcase() {
     Z
   `;
 
+  const fullscreenRectPath = "M0 0H1000V600H0Z";
+  const clipPathD = isFullscreen ? fullscreenRectPath : shapePath;
+
   return (
     <section
       ref={rootRef as unknown as React.RefObject<HTMLElement>}
@@ -449,18 +452,22 @@ export default function FilmsShowcase() {
 
       <div className="relative w-[95%] md:w-[90%] lg:w-[80%] xl:w-[70%] max-w-[1200px] flex items-center justify-center z-10">
         <div
-          className="group relative w-full aspect-[5/3]"
+          className={isFullscreen ? "group relative w-full h-full" : "group relative w-full aspect-[5/3]"}
           onPointerDown={handlePlayerPointerDown}
           ref={playerRef}
         >
           <svg
             viewBox="0 0 1000 600"
-            className="w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] pointer-events-none"
-            preserveAspectRatio="xMidYMid meet"
+            className={
+              isFullscreen
+                ? "w-full h-full"
+                : "w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] pointer-events-none"
+            }
+            preserveAspectRatio={isFullscreen ? "none" : "xMidYMid meet"}
           >
             <defs>
               <clipPath id="blob-clip" clipPathUnits="userSpaceOnUse">
-                <path d={shapePath} />
+                <path d={clipPathD} />
               </clipPath>
 
               <radialGradient
@@ -497,7 +504,7 @@ export default function FilmsShowcase() {
               </filter>
             </defs>
 
-            <path d={shapePath} fill="#0a0a0a" />
+            <path d={clipPathD} fill="#0a0a0a" />
 
             <foreignObject
               x="0"
@@ -540,10 +547,10 @@ export default function FilmsShowcase() {
                     style={{
                       width: "100%",
                       height: "100%",
-                      objectFit: "cover",
+                      objectFit: isFullscreen ? "contain" : "cover",
                       objectPosition: "center",
                       display: "block",
-                      transform: "scale(1.34)",
+                      transform: isFullscreen ? undefined : "scale(1.34)",
                       transformOrigin: "center",
                       opacity: videoOpacity,
                       transition: "opacity 280ms ease",
@@ -567,12 +574,14 @@ export default function FilmsShowcase() {
               </div>
             </foreignObject>
 
-            <path
-              d={shapePath}
-              fill="none"
-              stroke="rgba(255,255,255,0.15)"
-              strokeWidth="1.5"
-            />
+            {!isFullscreen ? (
+              <path
+                d={shapePath}
+                fill="none"
+                stroke="rgba(255,255,255,0.15)"
+                strokeWidth="1.5"
+              />
+            ) : null}
           </svg>
 
           {/* Center overlay play button */}

@@ -422,6 +422,9 @@ export default function DesignsShowcase() {
     Z
   `;
 
+  const fullscreenRectPath = "M0 0H1000V600H0Z";
+  const clipPathD = isFullscreen ? fullscreenRectPath : shapePath;
+
   return (
     <section
       ref={rootRef as unknown as React.RefObject<HTMLElement>}
@@ -429,19 +432,27 @@ export default function DesignsShowcase() {
     >
       <div className="relative w-[96%] md:w-[94%] lg:w-[90%] xl:w-[86%] max-w-[1500px] flex items-center justify-center">
         <div
-          className="group relative w-full aspect-[2.05/1] md:aspect-[2.0/1] isolation-isolate"
+          className={
+            isFullscreen
+              ? "group relative w-full h-full isolation-isolate"
+              : "group relative w-full aspect-[2.05/1] md:aspect-[2.0/1] isolation-isolate"
+          }
           ref={playerRef}
           onPointerDown={handlePlayerPointerDown}
         >
           {/* SVG layer */}
           <svg
             viewBox="0 0 1000 600"
-            className="w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] relative z-10 pointer-events-none"
+            className={
+              isFullscreen
+                ? "w-full h-full relative z-10"
+                : "w-full h-full drop-shadow-[0_25px_60px_rgba(0,0,0,0.9)] relative z-10 pointer-events-none"
+            }
             preserveAspectRatio="none"
           >
             <defs>
               <clipPath id="blob-mask-design" clipPathUnits="userSpaceOnUse">
-                <path d={shapePath} />
+                <path d={clipPathD} />
               </clipPath>
 
               <radialGradient
@@ -481,10 +492,10 @@ export default function DesignsShowcase() {
             </defs>
 
             <g>
-              <path d={shapePath} fill="#0a0500" />
-              <path d={shapePath} fill="url(#warm1)" style={{ mixBlendMode: "screen" }} />
-              <path d={shapePath} fill="url(#warm2)" style={{ mixBlendMode: "screen" }} />
-              <path d={shapePath} fill="url(#warm3)" style={{ mixBlendMode: "screen" }} />
+              <path d={clipPathD} fill="#0a0500" />
+              <path d={clipPathD} fill="url(#warm1)" style={{ mixBlendMode: "screen" }} />
+              <path d={clipPathD} fill="url(#warm2)" style={{ mixBlendMode: "screen" }} />
+              <path d={clipPathD} fill="url(#warm3)" style={{ mixBlendMode: "screen" }} />
 
               <foreignObject x="0" y="0" width="1000" height="600" clipPath="url(#blob-mask-design)">
                 <div
@@ -548,7 +559,7 @@ export default function DesignsShowcase() {
                             style={{
                               width: "100%",
                               height: "100%",
-                              objectFit: "cover",
+                              objectFit: isFullscreen ? "contain" : "cover",
                               objectPosition: "center",
                               display: "block",
                             }}
@@ -584,12 +595,14 @@ export default function DesignsShowcase() {
               />
             </g>
 
-            <path
-              d={shapePath}
-              fill="none"
-              stroke="rgba(255,255,255,0.15)"
-              strokeWidth="1.5"
-            />
+            {!isFullscreen ? (
+              <path
+                d={shapePath}
+                fill="none"
+                stroke="rgba(255,255,255,0.15)"
+                strokeWidth="1.5"
+              />
+            ) : null}
           </svg>
 
           {/* Center overlay play button */}
