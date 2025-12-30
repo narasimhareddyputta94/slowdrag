@@ -104,8 +104,13 @@ export default function FilmsShowcase() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [phase, setPhase] = useState<"idle" | "out" | "in">("idle");
   const [muted, setMuted] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [userRequestedPlay, setUserRequestedPlay] = useState(false);
+  const [autoplayArmed, setAutoplayArmed] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const autoplayDesired = userRequestedPlay || autoplayArmed;
+  const canAttachVideoSrc = canLoadVideo && autoplayDesired;
 
   // Keep track of timeouts so we can clear them (prevents "stuck" phase)
   const timeoutsRef = useRef<number[]>([]);
@@ -118,9 +123,47 @@ export default function FilmsShowcase() {
     return () => clearAllTimeouts();
   }, []);
 
-  // When activeIndex changes, force reload + play from start
+  // Arm autoplay after the page has settled, to reduce initial-load contention.
+  // If the user clicks play, we arm immediately.
   useEffect(() => {
     if (!canLoadVideo) return;
+    if (userRequestedPlay || autoplayArmed) return;
+
+    const saveData = (navigator as unknown as { connection?: { saveData?: boolean } })?.connection?.saveData;
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+    if (saveData || reducedMotion) return;
+
+    let cancelled = false;
+    let usedIdleCallback = false;
+    let handle: number | undefined;
+
+    const arm = () => {
+      if (cancelled) return;
+      setAutoplayArmed(true);
+    };
+
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number })
+      .requestIdleCallback;
+    const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+
+    if (typeof ric === "function") {
+      usedIdleCallback = true;
+      handle = ric(arm, { timeout: 1500 });
+    } else {
+      handle = window.setTimeout(arm, 700);
+    }
+
+    return () => {
+      cancelled = true;
+      if (handle === undefined) return;
+      if (usedIdleCallback) cic?.(handle);
+      else window.clearTimeout(handle);
+    };
+  }, [canLoadVideo, userRequestedPlay, autoplayArmed]);
+
+  // When activeIndex changes, force reload + play from start
+  useEffect(() => {
+    if (!canAttachVideoSrc) return;
     const v = videoRef.current;
     if (!v) return;
 
@@ -133,11 +176,11 @@ export default function FilmsShowcase() {
     v.load();
     const p = v.play();
     if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-  }, [activeIndex, muted, canLoadVideo]);
+  }, [activeIndex, muted, canAttachVideoSrc]);
 
   // Keep DOM video element in sync with mute state
   useEffect(() => {
-    if (!canLoadVideo) return;
+    if (!canAttachVideoSrc) return;
     const v = videoRef.current;
     if (!v) return;
     v.muted = muted;
@@ -146,7 +189,7 @@ export default function FilmsShowcase() {
       const p = v.play();
       if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
     }
-  }, [muted, canLoadVideo]);
+  }, [muted, canAttachVideoSrc]);
 
   // Pause when offscreen to reduce CPU/battery.
   useEffect(() => {
@@ -157,11 +200,11 @@ export default function FilmsShowcase() {
       return;
     }
 
-    if (canLoadVideo && isPlaying && v.paused) {
+    if (canAttachVideoSrc && autoplayDesired && isPlaying && v.paused) {
       const p = v.play();
       if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
     }
-  }, [near, canLoadVideo, isPlaying]);
+  }, [near, canAttachVideoSrc, autoplayDesired, isPlaying]);
 
   const requestIndex = (nextIndex: number) => {
     if (nextIndex === activeIndex) return;
@@ -187,6 +230,8 @@ export default function FilmsShowcase() {
 
   const togglePlay = () => {
     const v = videoRef.current;
+    setUserRequestedPlay(true);
+    setAutoplayArmed(true);
     if (!v) return;
 
     if (v.paused) {
@@ -338,16 +383,17 @@ export default function FilmsShowcase() {
                 {active?.src ? (
                   <video
                     ref={videoRef}
-                    src={canLoadVideo ? active.src : undefined}
+                    src={canAttachVideoSrc ? active.src : undefined}
                     poster={canLoadVideo ? active.poster : undefined}
                     muted={muted}
                     playsInline
-                    autoPlay
-                    preload={canLoadVideo ? "metadata" : "none"}
+                    autoPlay={autoplayDesired}
+                    preload={canAttachVideoSrc ? "metadata" : "none"}
                     onEnded={next}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     onCanPlay={() => {
+                      if (!autoplayDesired) return;
                       const v = videoRef.current;
                       if (!v) return;
                       v.muted = muted;

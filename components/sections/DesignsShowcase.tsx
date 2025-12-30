@@ -97,8 +97,13 @@ export default function DesignsShowcase() {
   );
 
   const [muted, setMuted] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [userRequestedPlay, setUserRequestedPlay] = useState(false);
+  const [autoplayArmed, setAutoplayArmed] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const autoplayDesired = userRequestedPlay || autoplayArmed;
+  const canAttachVideoSrc = canLoadVideo && autoplayDesired;
 
   const startIndex = useMemo(() => {
     const idx = designs.findIndex((d) => d.title === "brandbook draft");
@@ -128,9 +133,47 @@ export default function DesignsShowcase() {
 
   const padding = 0;
 
-  // Keep DOM video element in sync with mute state
+  // Arm autoplay after the page has settled, to reduce initial-load contention.
+  // If the user clicks play, we arm immediately.
   useEffect(() => {
     if (!canLoadVideo) return;
+    if (userRequestedPlay || autoplayArmed) return;
+
+    const saveData = (navigator as unknown as { connection?: { saveData?: boolean } })?.connection?.saveData;
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+    if (saveData || reducedMotion) return;
+
+    let cancelled = false;
+    let usedIdleCallback = false;
+    let handle: number | undefined;
+
+    const arm = () => {
+      if (cancelled) return;
+      setAutoplayArmed(true);
+    };
+
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number })
+      .requestIdleCallback;
+    const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+
+    if (typeof ric === "function") {
+      usedIdleCallback = true;
+      handle = ric(arm, { timeout: 1500 });
+    } else {
+      handle = window.setTimeout(arm, 700);
+    }
+
+    return () => {
+      cancelled = true;
+      if (handle === undefined) return;
+      if (usedIdleCallback) cic?.(handle);
+      else window.clearTimeout(handle);
+    };
+  }, [canLoadVideo, userRequestedPlay, autoplayArmed]);
+
+  // Keep DOM video element in sync with mute state
+  useEffect(() => {
+    if (!canAttachVideoSrc) return;
     const v = videoRef.current;
     if (!v) return;
     v.muted = muted;
@@ -140,11 +183,11 @@ export default function DesignsShowcase() {
         p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
       }
     }
-  }, [muted, canLoadVideo]);
+  }, [muted, canAttachVideoSrc]);
 
   // Reload + play when media changes
   useEffect(() => {
-    if (!canLoadVideo) return;
+    if (!canAttachVideoSrc) return;
     const v = videoRef.current;
     if (!v) return;
     v.muted = muted;
@@ -156,7 +199,7 @@ export default function DesignsShowcase() {
     if (p) {
       p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
     }
-  }, [firstDesign?.src, muted, canLoadVideo]);
+  }, [firstDesign?.src, muted, canAttachVideoSrc]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -166,16 +209,18 @@ export default function DesignsShowcase() {
       return;
     }
 
-    if (canLoadVideo && isPlaying && v.paused) {
+    if (canAttachVideoSrc && autoplayDesired && isPlaying && v.paused) {
       const p = v.play();
       if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
     }
-  }, [near, canLoadVideo, isPlaying]);
+  }, [near, canAttachVideoSrc, autoplayDesired, isPlaying]);
 
   const toggleMute = () => setMuted((m) => !m);
 
   const togglePlay = () => {
     const v = videoRef.current;
+    setUserRequestedPlay(true);
+    setAutoplayArmed(true);
     if (!v) return;
     if (v.paused) {
       const p = v.play();
@@ -354,17 +399,18 @@ export default function DesignsShowcase() {
                         >
                           <video
                             ref={videoRef}
-                            src={canLoadVideo ? encodeURI(firstDesign.src) : undefined}
+                            src={canAttachVideoSrc ? encodeURI(firstDesign.src) : undefined}
                             aria-label={firstDesign.title}
                             poster={canLoadVideo ? firstDesign.poster : undefined}
                             muted={muted}
-                            autoPlay
+                            autoPlay={autoplayDesired}
                             loop
                             playsInline
-                            preload={canLoadVideo ? "metadata" : "none"}
+                            preload={canAttachVideoSrc ? "metadata" : "none"}
                             onPlay={() => setIsPlaying(true)}
                             onPause={() => setIsPlaying(false)}
                             onCanPlay={() => {
+                              if (!autoplayDesired) return;
                               const v = videoRef.current;
                               if (!v) return;
                               v.muted = muted;
