@@ -14,7 +14,7 @@ type MountWhenNearViewportProps = {
 export default function MountWhenNearViewport({
   children,
   placeholder = null,
-  rootMargin = "1200px 0px",
+  rootMargin = "150px 0px",
   threshold = 0.01,
 }: MountWhenNearViewportProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);

@@ -123,11 +123,20 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
           objectFit: "contain",
         }}
         src={videoSrc}
-        autoPlay
         muted
         loop
         playsInline
         preload="metadata"
+        onLoadedMetadata={() => {
+          // Start playback only once metadata is available and we've had a paint.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              void videoRef.current?.play?.().catch(() => {
+                // Ignore autoplay failures; safety timer will dismiss.
+              });
+            });
+          });
+        }}
       />
     </div>
   );

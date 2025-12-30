@@ -100,7 +100,7 @@ export default function FilmsShowcase() {
 
   const rootRef = useRef<HTMLElement | null>(null);
   const isMobile = useIsMobile(768);
-  const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "200px 0px" });
+  const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "150px 0px" });
   const siteLoaded = useSiteLoaded();
   const afterFirstPaint = useAfterFirstPaint();
   const [activated, setActivated] = useState(false);
@@ -180,7 +180,15 @@ export default function FilmsShowcase() {
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (!near) v.pause();
+    if (!near) {
+      v.pause();
+      return;
+    }
+
+    if (canLoadVideo && isPlaying && v.paused) {
+      const p = v.play();
+      if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
   }, [near]);
 
   const requestIndex = (nextIndex: number) => {

@@ -6,6 +6,12 @@ import { useRouter } from "next/navigation";
 import useAfterFirstPaint from "@/components/perf/useAfterFirstPaint";
 import useSiteLoaded from "@/components/perf/useSiteLoaded";
 
+declare global {
+  interface Window {
+    __slowdrag_heroRafRunning?: boolean;
+  }
+}
+
 type HeroProps = {
   imageSrc: string;
   onScrolledChange?: (scrolled: boolean) => void;
@@ -64,6 +70,9 @@ export default function HeroMeltWebGL({
   onMeltFinished,
 }: HeroProps) {
   const router = useRouter();
+  useEffect(() => {
+    window.__slowdrag_heroRafRunning = false;
+  }, []);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -127,6 +136,9 @@ export default function HeroMeltWebGL({
     lastLayoutH: 0,
     scrollY: 0,
     virtualScroll: 0,
+    // Cache the intended lock distance so it doesn't change mid-gesture
+    // (mobile address-bar show/hide can change innerHeight and prematurely finish the melt).
+    lockDistance: 0,
     lockDone: false,
     lockActive: false,
     lockScrollY: 0,
@@ -166,6 +178,10 @@ export default function HeroMeltWebGL({
       const gl = s.gl;
       if (!gl || !s.loaded || !s.maskProg || !s.renderProg || !s.postProg) return;
       if (!s.inView || !s.pageVisible) return;
+      if (s.freeze) {
+        window.__slowdrag_heroRafRunning = false;
+        return;
+      }
 
       // ✅ Hide poster once WebGL is actually running (LCP has already happened)
       if (!posterHideOnceRef.current) {
@@ -192,12 +208,17 @@ export default function HeroMeltWebGL({
       const anim = (now - s.t0) * 0.001;
 
       /* ---------------- SCROLL LOGIC ---------------- */
-      const winH = typeof window !== "undefined" ? window.innerHeight : 900;
-      const lockDistance = winH;
+      const winH = typeof window !== "undefined" ? (window.visualViewport?.height ?? window.innerHeight) : 900;
+      // Use a stable lock distance while the hero is pinned.
+      // If we recompute from `innerHeight` each frame, mobile UI chrome changes can cause
+      // the melt to reach 1.0 too early (looks like the animation "stops" mid-section).
+      const lockDistance = s.lockDistance > 0 ? s.lockDistance : winH * 1.35;
 
       const raw = s.lockDone ? 1.0 : Math.max(0, Math.min(1.0, s.virtualScroll / Math.max(1, lockDistance)));
 
-      const target = raw * 1.35;
+      // Map scroll progress 1:1 to the melt so it reaches the end only when the hero lock ends.
+      // (Previously 1.35 caused the melt to finish early and then "stop" while scroll lock continued.)
+      const target = raw;
       s.target = Math.max(s.target, target);
 
       const ease = 1.0 - Math.exp(-dt * 8.0);
@@ -221,8 +242,8 @@ export default function HeroMeltWebGL({
       }
 
       /* ---------------- RENDER ---------------- */
-      const timeVal = Math.max(0, Math.min(1.25, s.p));
-      const progress01 = Math.max(0, Math.min(1, timeVal));
+      const progress01 = Math.max(0, Math.min(1, s.p));
+      const timeVal = progress01 * 1.25;
 
       const W = gl.drawingBufferWidth;
       const H = gl.drawingBufferHeight;
@@ -284,6 +305,19 @@ export default function HeroMeltWebGL({
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       s.ping = 1 - s.ping;
+
+      // Do not freeze immediately at completion; keep the subtle flow running until the hero
+      // actually leaves the viewport (IntersectionObserver will pause rendering offscreen).
+
+      // If the user hasn't started the melt (no wheel/touch input), render a stable first frame
+      // then freeze to avoid a continuous RAF/WebGL loop during Lighthouse.
+      if (!s.hasEverMelted && !s.lockActive && !s.lockDone && s.virtualScroll <= 0.5) {
+        s.freeze = true;
+        window.__slowdrag_heroRafRunning = false;
+        return;
+      }
+
+      window.__slowdrag_heroRafRunning = true;
       if (loopRef.current && s.inView && s.pageVisible) s.raf = requestAnimationFrame(loopRef.current);
     };
 
@@ -301,10 +335,16 @@ export default function HeroMeltWebGL({
     const updateRunState = () => {
       if (!s.pageVisible || !s.inView) {
         cancelAnimationFrame(s.raf);
+        window.__slowdrag_heroRafRunning = false;
+        return;
+      }
+      if (s.freeze) {
+        window.__slowdrag_heroRafRunning = false;
         return;
       }
       if (loopRef.current && s.loaded) {
         cancelAnimationFrame(s.raf);
+        window.__slowdrag_heroRafRunning = true;
         s.raf = requestAnimationFrame(loopRef.current);
       }
     };
@@ -355,18 +395,29 @@ export default function HeroMeltWebGL({
     const s = S.current;
     let lastTouchY = 0;
 
+    let detached = false;
+    const prevOverscroll = document.documentElement.style.overscrollBehaviorY;
+    const detach = () => {
+      if (detached) return;
+      detached = true;
+      document.documentElement.style.overscrollBehaviorY = prevOverscroll;
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+    };
+
     const shouldLockNow = () => {
       if (s.lockDone) return false;
       const el = containerRef.current;
       if (!el) return false;
-      const winH = window.innerHeight || 900;
+      const winH = (window.visualViewport?.height ?? window.innerHeight) || 900;
       const rect = el.getBoundingClientRect();
       return rect.top <= 0 && rect.bottom >= winH * 0.85;
     };
 
     const applyDelta = (dy: number) => {
-      const winH = window.innerHeight || 900;
-      const lockDistance = winH;
+      const winH = (window.visualViewport?.height ?? window.innerHeight) || 900;
+      const lockDistance = s.lockDistance > 0 ? s.lockDistance : winH * 1.35;
 
       s.virtualScroll = Math.max(0, Math.min(lockDistance, s.virtualScroll + dy));
 
@@ -374,6 +425,14 @@ export default function HeroMeltWebGL({
         if (!s.lockDone) {
           s.lockDone = true;
           s.lockActive = false;
+
+          // Ensure the melt reaches the final state exactly at the end of the lock.
+          s.target = 1.0;
+          s.p = 1.0;
+          s.hasEverMelted = true;
+
+          // Detach heavy listeners as soon as the melt is done.
+          detach();
 
           if (!meltFinishedOnceRef.current) {
             meltFinishedOnceRef.current = true;
@@ -388,6 +447,16 @@ export default function HeroMeltWebGL({
       if (!s.lockActive) {
         s.lockActive = true;
         s.lockScrollY = window.scrollY;
+        // Cache once per lock so the end point doesn't drift.
+        const baseH = (window.visualViewport?.height ?? window.innerHeight) || 900;
+        s.lockDistance = baseH * 1.35;
+      }
+      if (s.freeze) {
+        s.freeze = false;
+        if (loopRef.current && s.loaded && s.pageVisible) {
+          cancelAnimationFrame(s.raf);
+          s.raf = requestAnimationFrame(loopRef.current);
+        }
       }
       e.preventDefault();
       applyDelta(e.deltaY);
@@ -398,6 +467,8 @@ export default function HeroMeltWebGL({
       if (shouldLockNow() && !s.lockActive) {
         s.lockActive = true;
         s.lockScrollY = window.scrollY;
+        const baseH = (window.visualViewport?.height ?? window.innerHeight) || 900;
+        s.lockDistance = baseH * 1.35;
       }
       lastTouchY = e.touches[0]?.clientY ?? 0;
     };
@@ -408,6 +479,13 @@ export default function HeroMeltWebGL({
         s.lockActive = true;
         s.lockScrollY = window.scrollY;
       }
+      if (s.freeze) {
+        s.freeze = false;
+        if (loopRef.current && s.loaded && s.pageVisible) {
+          cancelAnimationFrame(s.raf);
+          s.raf = requestAnimationFrame(loopRef.current);
+        }
+      }
       const y = e.touches[0]?.clientY ?? lastTouchY;
       const dy = lastTouchY - y;
       lastTouchY = y;
@@ -416,7 +494,6 @@ export default function HeroMeltWebGL({
       scheduleFixScroll();
     };
 
-    const prevOverscroll = document.documentElement.style.overscrollBehaviorY;
     document.documentElement.style.overscrollBehaviorY = "none";
 
     window.addEventListener("wheel", onWheel, { passive: false });
@@ -424,10 +501,7 @@ export default function HeroMeltWebGL({
     window.addEventListener("touchmove", onTouchMove, { passive: false });
 
     return () => {
-      document.documentElement.style.overscrollBehaviorY = prevOverscroll;
-      window.removeEventListener("wheel", onWheel);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
+      detach();
     };
   }, []);
 
@@ -444,6 +518,9 @@ export default function HeroMeltWebGL({
     let idleId: number | undefined;
     let timeoutId = 0;
 
+    let inViewForStart = false;
+    let startArmed = false;
+
     const w = window as unknown as {
       requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
       cancelIdleCallback?: (id: number) => void;
@@ -457,6 +534,13 @@ export default function HeroMeltWebGL({
 
     const startNow = () => {
       if (cancelled || started) return;
+
+      // Only start the heavy WebGL work if the hero is actually in view.
+      if (!inViewForStart) {
+        startArmed = true;
+        return;
+      }
+
       started = true;
 
       if (idleId !== undefined && typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
@@ -489,6 +573,17 @@ export default function HeroMeltWebGL({
       timeoutId = window.setTimeout(startNow, 2500);
     }
 
+    // Track visibility for start gating.
+    const el = containerRef.current;
+    const io = new IntersectionObserver(
+      (entries) => {
+        inViewForStart = entries[0]?.isIntersecting ?? false;
+        if (inViewForStart && startArmed) startNow();
+      },
+      { threshold: 0.01 }
+    );
+    if (el) io.observe(el);
+
     return () => {
       cancelled = true;
       window.removeEventListener("pointerdown", onInteraction);
@@ -498,6 +593,7 @@ export default function HeroMeltWebGL({
 
       if (idleId !== undefined && typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
       window.clearTimeout(timeoutId);
+      io.disconnect();
       cleanup?.();
     };
   }, [afterFirstPaint, imageSrc, siteLoaded]);

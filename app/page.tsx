@@ -3,7 +3,6 @@ import Footer from "@/components/footer/Footer";
 import HomeClient from "@/app/HomeClient";
 import FilmsSectionClient from "./FilmsSectionClient";
 import DesignsSectionClient from "./DesignsSectionClient";
-import RotatedVideoSection from "@/components/sections/RotatedVideoSection";
 import InitialLoadingOverlay from "@/components/perf/InitialLoadingOverlay";
 
 export default function Home() {
@@ -24,8 +23,6 @@ export default function Home() {
 
       {/* ✅ Designs section switches by breakpoint */}
       <DesignsSectionClient />
-
-      <RotatedVideoSection />
       <Footer />
     </main>
   );

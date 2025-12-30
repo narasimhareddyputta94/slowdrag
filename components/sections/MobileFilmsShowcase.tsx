@@ -100,7 +100,7 @@ export default function MobileFilmsShowcase() {
 
   const rootRef = useRef<HTMLElement | null>(null);
   const isSmallScreen = useIsMobile(768);
-  const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "200px 0px" });
+  const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "150px 0px" });
   const siteLoaded = useSiteLoaded();
   const afterFirstPaint = useAfterFirstPaint();
   const [activated, setActivated] = useState(false);
@@ -179,8 +179,16 @@ export default function MobileFilmsShowcase() {
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (!near) v.pause();
-  }, [near]);
+    if (!near) {
+      v.pause();
+      return;
+    }
+
+    if (canLoadVideo && isPlaying && v.paused) {
+      const p = v.play();
+      if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
+  }, [near, canLoadVideo, isPlaying]);
 
   const requestIndex = (nextIndex: number) => {
     if (nextIndex === activeIndex) return;

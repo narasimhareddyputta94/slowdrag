@@ -423,6 +423,10 @@ void main() {
 
 export function startHeroMeltWebGL({ canvas, imageSrc, state, getLoop, onHeroReady }: HeroMeltRuntimeParams) {
   const isSmallScreen = window.matchMedia?.("(max-width: 768px)")?.matches ?? false;
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+  const saveData = (navigator as any)?.connection?.saveData === true;
+  const lowCores = (navigator.hardwareConcurrency ?? 8) <= 4;
+  const constrained = prefersReducedMotion || saveData || lowCores;
 
   let cancelled = false;
   const s = state;
@@ -431,7 +435,7 @@ export function startHeroMeltWebGL({ canvas, imageSrc, state, getLoop, onHeroRea
     alpha: false,
     premultipliedAlpha: true,
     antialias: false,
-    powerPreference: isSmallScreen ? "low-power" : "high-performance",
+    powerPreference: isSmallScreen || constrained ? "low-power" : "high-performance",
     failIfMajorPerformanceCaveat: false,
   });
 
@@ -555,7 +559,8 @@ export function startHeroMeltWebGL({ canvas, imageSrc, state, getLoop, onHeroRea
       s.cover = 0;
     }
 
-    const dprCap = isSmallScreen ? 1 : 2;
+    const baseCap = isSmallScreen ? 1.25 : 2;
+    const dprCap = constrained ? Math.min(baseCap, 1) : baseCap;
     const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
 
     if (Math.abs(rect.width - s.lastLayoutW) < 1 && Math.abs(rect.height - s.lastLayoutH) < 1) return;
