@@ -21,6 +21,15 @@ function safeBool(v: unknown) {
   return v === true;
 }
 
+type VideoPlaybackQualityLike = {
+  totalVideoFrames?: number;
+  droppedVideoFrames?: number;
+};
+
+type HTMLVideoElementWithQuality = HTMLVideoElement & {
+  getVideoPlaybackQuality?: () => VideoPlaybackQualityLike;
+};
+
 export default function PerfLogger() {
   const enabled = useMemo(() => isEnabled(), []);
 
@@ -56,18 +65,11 @@ export default function PerfLogger() {
     try {
       obs = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
-          // Long Task entries are typically PerformanceLongTaskTiming
-          // but we avoid typing dependencies here.
-          const d = (entry as any).duration;
-          if (typeof d === "number") {
-            longTaskCountRef.current += 1;
-            longTaskTotalMsRef.current += d;
-          } else {
-            longTaskCountRef.current += 1;
-          }
+          longTaskCountRef.current += 1;
+          longTaskTotalMsRef.current += entry.duration;
         }
       });
-      obs.observe({ entryTypes: ["longtask"] as any });
+      obs.observe({ entryTypes: ["longtask"] });
     } catch {
       // Ignore if unsupported.
     }
@@ -105,7 +107,7 @@ export default function PerfLogger() {
       const videosWithSrc = videos.filter((v) => Boolean(v.currentSrc || v.getAttribute("src"))).length;
       const videosPlaying = videos.filter((v) => !v.paused && !v.ended).length;
       const videosDecoding = videos.filter((v) => {
-        const q = (v as any).getVideoPlaybackQuality?.();
+        const q = (v as HTMLVideoElementWithQuality).getVideoPlaybackQuality?.();
         if (q && typeof q.totalVideoFrames === "number" && typeof q.droppedVideoFrames === "number") {
           // If frames exist and it isn't paused, assume decoding is happening.
           return q.totalVideoFrames > 0 && !v.paused;
@@ -113,7 +115,6 @@ export default function PerfLogger() {
         return !v.paused && (v.readyState ?? 0) >= 2;
       }).length;
 
-      // eslint-disable-next-line no-console
       console.log(
         `[slowdrag:perf] raf/s=${rafPerSec} longtasks=${longTasks} longtaskMs=${longTaskTotalMs} ` +
           `lenis=${lenisRunning} heroRAF=${heroRafRunning} videos(src=${videosWithSrc},playing=${videosPlaying},decoding=${videosDecoding})`

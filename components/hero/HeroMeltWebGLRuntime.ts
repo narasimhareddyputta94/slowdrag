@@ -1,9 +1,79 @@
 "use client";
 
+type UniformLoc = WebGLUniformLocation | null;
+
+type HeroMeltUniformsMask = {
+  logo: UniformLoc;
+  prevMask: UniformLoc;
+  res: UniformLoc;
+  imgRes: UniformLoc;
+  cover: UniformLoc;
+  time: UniformLoc;
+  anim: UniformLoc;
+  seed: UniformLoc;
+};
+
+type HeroMeltUniformsRender = {
+  logo: UniformLoc;
+  mask: UniformLoc;
+  res: UniformLoc;
+  imgRes: UniformLoc;
+  cover: UniformLoc;
+  anim: UniformLoc;
+  seed: UniformLoc;
+  progress: UniformLoc;
+  brand: UniformLoc;
+};
+
+type HeroMeltUniformsPost = {
+  scene: UniformLoc;
+  res: UniformLoc;
+  anim: UniformLoc;
+  seed: UniformLoc;
+  progress: UniformLoc;
+};
+
+export type HeroMeltRuntimeState = {
+  gl: WebGLRenderingContext | null;
+  maskProg: WebGLProgram | null;
+  renderProg: WebGLProgram | null;
+  postProg: WebGLProgram | null;
+  blitProg: WebGLProgram | null;
+  triBuf: WebGLBuffer | null;
+  logoTex: WebGLTexture | null;
+  maskTexA: WebGLTexture | null;
+  maskTexB: WebGLTexture | null;
+  fbA: WebGLFramebuffer | null;
+  fbB: WebGLFramebuffer | null;
+  sceneTex: WebGLTexture | null;
+  sceneFB: WebGLFramebuffer | null;
+  ping: number;
+  u_mask: HeroMeltUniformsMask | Record<string, UniformLoc>;
+  u_render: HeroMeltUniformsRender | Record<string, UniformLoc>;
+  u_post: HeroMeltUniformsPost | Record<string, UniformLoc>;
+  u_blit: UniformLoc;
+  raf: number;
+  fixScrollRaf?: number;
+  t0: number;
+  seed: number;
+  loaded: boolean;
+  imgW: number;
+  imgH: number;
+  lastLayoutW: number;
+  lastLayoutH: number;
+  cover: number;
+};
+
+type NavigatorWithConnection = Navigator & {
+  connection?: {
+    saveData?: boolean;
+  };
+};
+
 type HeroMeltRuntimeParams = {
   canvas: HTMLCanvasElement;
   imageSrc: string;
-  state: any;
+  state: HeroMeltRuntimeState;
   getLoop: () => (() => void) | null;
   onHeroReady: () => void;
 };
@@ -424,7 +494,7 @@ void main() {
 export function startHeroMeltWebGL({ canvas, imageSrc, state, getLoop, onHeroReady }: HeroMeltRuntimeParams) {
   const isSmallScreen = window.matchMedia?.("(max-width: 768px)")?.matches ?? false;
   const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
-  const saveData = (navigator as any)?.connection?.saveData === true;
+  const saveData = (navigator as NavigatorWithConnection).connection?.saveData === true;
   const lowCores = (navigator.hardwareConcurrency ?? 8) <= 4;
   const constrained = prefersReducedMotion || saveData || lowCores;
 

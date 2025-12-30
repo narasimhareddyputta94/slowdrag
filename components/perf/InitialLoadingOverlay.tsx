@@ -4,17 +4,31 @@ import { useEffect, useRef, useState } from "react";
 
 type InitialLoadingOverlayProps = {
   src: string;
+  /** Keep overlay visible for at least this long (ms). */
+  minVisibleMs?: number;
+  /** If true, wait for `document.readyState === "complete"` before starting the loader video. */
+  waitForDocumentComplete?: boolean;
+  /** Fired once after the overlay is fully removed (phase becomes "gone"). */
+  onDismissed?: () => void;
 };
 
-export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProps) {
+export default function InitialLoadingOverlay({
+  src,
+  minVisibleMs = 2000,
+  waitForDocumentComplete = true,
+  onDismissed,
+}: InitialLoadingOverlayProps) {
   const [phase, setPhase] = useState<"show" | "hide" | "gone">("show");
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const dismissedOnceRef = useRef(false);
+  const onDismissedOnceRef = useRef(false);
   const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
   const heroReadyRef = useRef(false);
   const videoStartedRef = useRef(false);
   const mountedAtRef = useRef(0);
   const maybeDismissRef = useRef<(() => void) | null>(null);
+  const startedOnceRef = useRef(false);
+  const pageReadyRef = useRef(false);
 
   useEffect(() => {
     mountedAtRef.current = performance.now();
@@ -33,7 +47,6 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
     document.body.style.overflow = "hidden";
 
     let raf1 = 0;
-    let raf2 = 0;
 
     let dismissed = false;
     let fadeTimer: number | undefined;
@@ -60,6 +73,11 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
       fadeTimer = window.setTimeout(() => {
         setPhase("gone");
 
+        if (!onDismissedOnceRef.current) {
+          onDismissedOnceRef.current = true;
+          onDismissed?.();
+        }
+
         // Restore scroll.
         document.documentElement.style.overflow = prevHtmlOverflow;
         document.body.style.overflow = prevBodyOverflow;
@@ -77,21 +95,44 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
     };
 
     const maybeDismiss = () => {
+      if (!pageReadyRef.current) return;
       if (!heroReadyRef.current) return;
-
-      // Give the video a brief moment to actually begin playback.
-      // If autoplay is blocked, the safety timer still guarantees we don't hang forever.
       const elapsed = performance.now() - mountedAtRef.current;
-      if (videoStartedRef.current || elapsed >= 900) dismiss();
+
+      // Always keep the overlay for a minimum duration.
+      if (elapsed < minVisibleMs) return;
+
+      // If autoplay is blocked, we still dismiss after `minVisibleMs` once the hero is ready.
+      if (videoStartedRef.current || elapsed >= minVisibleMs) dismiss();
     };
 
     maybeDismissRef.current = maybeDismiss;
 
-    // After first paint, start the loader video and boot the hero.
-    raf1 = requestAnimationFrame(() => {
+    const startOnce = () => {
+      if (startedOnceRef.current) return;
+      startedOnceRef.current = true;
+
+      // Start the loader video and boot the hero.
       setVideoSrc(src);
       dispatchSiteLoadedOnce();
+    };
+
+    // Start the loader only once the document is fully loaded (requested behavior).
+    // If the load already happened, we start immediately.
+    pageReadyRef.current = !waitForDocumentComplete || document.readyState === "complete";
+    raf1 = requestAnimationFrame(() => {
+      if (pageReadyRef.current) startOnce();
     });
+
+    const onLoad = () => {
+      pageReadyRef.current = true;
+      startOnce();
+      maybeDismissRef.current?.();
+    };
+
+    if (waitForDocumentComplete && !pageReadyRef.current) {
+      window.addEventListener("load", onLoad, { once: true });
+    }
 
     // Primary dismissal signal: hero is ready to be shown.
     const onHeroReady = () => {
@@ -101,23 +142,23 @@ export default function InitialLoadingOverlay({ src }: InitialLoadingOverlayProp
     window.addEventListener("slowdrag:heroReady", onHeroReady);
 
     // Safety: never block forever if autoplay fails or load event is delayed.
-    const safetyTimer = window.setTimeout(dismiss, 6000);
+    const safetyTimer = window.setTimeout(dismiss, Math.max(6000, minVisibleMs + 4000));
 
     return () => {
       maybeDismissRef.current = null;
       window.removeEventListener("slowdrag:heroReady", onHeroReady);
+      window.removeEventListener("load", onLoad);
       if (fadeTimer !== undefined) window.clearTimeout(fadeTimer);
       if (goneTimer !== undefined) window.clearTimeout(goneTimer);
       window.clearTimeout(safetyTimer);
 
       window.cancelAnimationFrame(raf1);
-      window.cancelAnimationFrame(raf2);
 
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.body.style.overflow = prevBodyOverflow;
       document.body.style.paddingRight = prevBodyPaddingRight;
     };
-  }, []);
+  }, [minVisibleMs, onDismissed, src, waitForDocumentComplete]);
 
   if (phase === "gone") return null;
 

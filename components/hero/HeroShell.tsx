@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import useSiteLoaded from "@/components/perf/useSiteLoaded";
 import useAfterFirstPaint from "@/components/perf/useAfterFirstPaint";
@@ -39,7 +39,6 @@ export default function HeroShell({
   posterHeight = 960,
   onMeltFinished,
 }: HeroShellProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const [loadFull, setLoadFull] = useState(false);
   const siteLoaded = useSiteLoaded();
   const afterFirstPaint = useAfterFirstPaint();
@@ -90,7 +89,6 @@ export default function HeroShell({
   // Initial render: just the LCP image shell (no JS-heavy logic)
   return (
     <section
-      ref={containerRef}
       style={{
         height: "100svh",
         minHeight: "100svh",
@@ -137,30 +135,6 @@ export default function HeroShell({
             style={{
               objectFit: "contain",
               filter: "contrast(1.02) saturate(1.02)",
-            }}
-          />
-        </div>
-
-        {/* Canvas placeholder - will be replaced by full component */}
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            maxWidth: "2000px",
-            margin: "0 auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1,
-          }}
-        >
-          <canvas
-            style={{
-              width: "100%",
-              height: "100%",
-              display: "block",
-              pointerEvents: "none",
-              transform: "translateZ(0)",
             }}
           />
         </div>

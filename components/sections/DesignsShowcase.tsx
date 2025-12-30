@@ -75,10 +75,6 @@ function ControlButton({
   );
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
 export default function DesignsShowcase() {
   const tealColor = "#6fe7d3";
 
@@ -87,14 +83,7 @@ export default function DesignsShowcase() {
   const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "150px 0px" });
   const siteLoaded = useSiteLoaded();
   const afterFirstPaint = useAfterFirstPaint();
-  const [activated, setActivated] = useState(false);
-
-  useEffect(() => {
-    if (activated) return;
-    if (siteLoaded && afterFirstPaint && near) setActivated(true);
-  }, [activated, afterFirstPaint, near, siteLoaded]);
-
-  const canLoadVideo = activated;
+  const canLoadVideo = siteLoaded && afterFirstPaint && near;
 
   const designs: DesignItem[] = useMemo(
     () => [
@@ -127,11 +116,6 @@ export default function DesignsShowcase() {
     const normalized = ((offset % designs.length) + designs.length) % designs.length;
     return [...designs.slice(normalized), ...designs.slice(0, normalized)];
   }, [designs, offset]);
-
-  const normalizedOffset = useMemo(() => {
-    if (designs.length === 0) return 0;
-    return ((offset % designs.length) + designs.length) % designs.length;
-  }, [designs.length, offset]);
 
   const firstDesign = orderedDesigns[0];
 

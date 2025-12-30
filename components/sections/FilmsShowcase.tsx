@@ -74,27 +74,6 @@ function ControlButton({
   );
 }
 
-function MiniIconButton({
-  label,
-  onClick,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className="grid size-10 place-items-center rounded-full bg-white/5 ring-1 ring-white/10 backdrop-blur-md active:scale-[0.98] transition"
-    >
-      {children}
-    </button>
-  );
-}
-
 export default function FilmsShowcase() {
   const tealColor = "#6fe7d3";
 
@@ -103,14 +82,7 @@ export default function FilmsShowcase() {
   const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "150px 0px" });
   const siteLoaded = useSiteLoaded();
   const afterFirstPaint = useAfterFirstPaint();
-  const [activated, setActivated] = useState(false);
-
-  useEffect(() => {
-    if (activated) return;
-    if (siteLoaded && afterFirstPaint && near) setActivated(true);
-  }, [activated, afterFirstPaint, near, siteLoaded]);
-
-  const canLoadVideo = activated;
+  const canLoadVideo = siteLoaded && afterFirstPaint && near;
 
   const films: FilmItem[] = useMemo(() => {
     const videoFiles = [
@@ -189,7 +161,7 @@ export default function FilmsShowcase() {
       const p = v.play();
       if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
     }
-  }, [near]);
+  }, [near, canLoadVideo, isPlaying]);
 
   const requestIndex = (nextIndex: number) => {
     if (nextIndex === activeIndex) return;

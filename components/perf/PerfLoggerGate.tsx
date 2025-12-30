@@ -16,7 +16,10 @@ export default function PerfLoggerGate() {
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
-    setEnabled(shouldEnable());
+    const t = window.setTimeout(() => {
+      setEnabled(shouldEnable());
+    }, 0);
+    return () => window.clearTimeout(t);
   }, []);
 
   if (!enabled) return null;

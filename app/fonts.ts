@@ -18,24 +18,6 @@ const offBit = localFont({
   adjustFontFallback: "Arial",
 });
 
-const offBitBold = localFont({
-  src: "../public/fonts/OffBit-101Bold.ttf",
-  variable: "--font-offbit-bold",
-  display: "swap",
-  preload: true,
-  fallback: [
-    "ui-monospace",
-    "SFMono-Regular",
-    "Menlo",
-    "Monaco",
-    "Consolas",
-    "Liberation Mono",
-    "Courier New",
-    "monospace",
-  ],
-  adjustFontFallback: "Arial",
-});
-
 const offBit101 = localFont({
   src: "../public/fonts/OffBit-101.ttf",
   variable: "--font-offbit-101",
@@ -56,4 +38,4 @@ const offBit101 = localFont({
 
 const offbit = offBit;
 
-export { offBit, offBitBold, offBit101, offbit };
+export { offBit, offBit101, offbit };

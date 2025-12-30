@@ -32,69 +32,6 @@ function CenterPlayButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-function ControlButton({
-  label,
-  pressed,
-  onClick,
-  children,
-}: {
-  label: string;
-  pressed: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      aria-pressed={pressed}
-      className="group relative grid size-12 place-items-center rounded-full bg-black/35 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/45 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-      style={{
-        boxShadow:
-          "0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)",
-      }}
-    >
-      <span
-        aria-hidden
-        className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
-      />
-      <span
-        aria-hidden
-        className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80"
-      />
-      <span
-        aria-hidden
-        className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md"
-      />
-      <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.05]">
-        {children}
-      </span>
-    </button>
-  );
-}
-
-function MiniIconButton({
-  label,
-  onClick,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className="grid size-10 place-items-center rounded-full bg-white/5 ring-1 ring-white/10 backdrop-blur-md active:scale-[0.98] transition"
-    >
-      {children}
-    </button>
-  );
-}
-
 export default function MobileFilmsShowcase() {
   const tealColor = "#6fe7d3";
 
@@ -103,14 +40,7 @@ export default function MobileFilmsShowcase() {
   const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "150px 0px" });
   const siteLoaded = useSiteLoaded();
   const afterFirstPaint = useAfterFirstPaint();
-  const [activated, setActivated] = useState(false);
-
-  useEffect(() => {
-    if (activated) return;
-    if (siteLoaded && afterFirstPaint && near) setActivated(true);
-  }, [activated, afterFirstPaint, near, siteLoaded]);
-
-  const canLoadVideo = activated;
+  const canLoadVideo = siteLoaded && afterFirstPaint && near;
 
   const films: FilmItem[] = useMemo(() => {
     const videoFiles = [
@@ -130,7 +60,7 @@ export default function MobileFilmsShowcase() {
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [phase, setPhase] = useState<"idle" | "out" | "in">("idle");
-  const [muted, setMuted] = useState(true);
+  const [muted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(true);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -208,9 +138,6 @@ export default function MobileFilmsShowcase() {
   };
 
   const next = () => requestIndex((activeIndex + 1) % films.length);
-  const prev = () => requestIndex((activeIndex - 1 + films.length) % films.length);
-
-  const toggleMute = () => setMuted((m) => !m);
 
   const togglePlay = () => {
     const v = videoRef.current;

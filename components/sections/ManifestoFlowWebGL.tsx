@@ -5,8 +5,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 type ManifestoFlowWebGLProps = {
   /** Same color used by the hero melt animation */
   brandColor?: string;
-  /** Becomes true once the hero melt finishes */
-  armed?: boolean;
 };
 
 const MANIFESTO_LINES = [
@@ -22,7 +20,6 @@ const MANIFESTO_LINES = [
 
 export default function ManifestoFlowWebGL({
   brandColor = "#c6376c",
-  armed = false,
 }: ManifestoFlowWebGLProps) {
   const sectionRef = useRef<HTMLElement | null>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -55,8 +52,8 @@ export default function ManifestoFlowWebGL({
     if (!el) return;
 
     if (typeof IntersectionObserver === "undefined") {
-      setHasEnteredViewOnce(true);
-      return;
+      const t = window.setTimeout(() => setHasEnteredViewOnce(true), 0);
+      return () => window.clearTimeout(t);
     }
 
     const io = new IntersectionObserver(
@@ -83,8 +80,8 @@ export default function ManifestoFlowWebGL({
     if (!shouldStart) return;
 
     if (prefersReducedMotion) {
-      setAnimate(true);
-      return;
+      const t = window.setTimeout(() => setAnimate(true), 0);
+      return () => window.clearTimeout(t);
     }
 
     // IMPORTANT: rAF callbacks run *before* paint. A single rAF can flip state
