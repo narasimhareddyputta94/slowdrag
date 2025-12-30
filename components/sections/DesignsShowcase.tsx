@@ -13,23 +13,54 @@ type DesignItem = {
   poster?: string;
 };
 
+function formatTime(totalSeconds: number) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "0:00";
+  const clamped = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(clamped / 60);
+  const seconds = clamped % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
-function CenterPlayButton({ onClick }: { onClick: () => void }) {
+function PlayIcon({ color, size = 24 }: { color: string; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+    >
+      <path
+        d="M10.15 7.25c0-.9.98-1.45 1.75-.99l7.35 4.49c.74.45.74 1.52 0 1.97l-7.35 4.49c-.77.47-1.75-.09-1.75-.99v-9.97Z"
+        fill={color}
+      />
+    </svg>
+  );
+}
+
+
+function CenterPlayButton({ onClick, color }: { onClick: () => void; color: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label="Play video"
-      className="group relative grid size-20 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
+      className="group relative grid size-20 place-items-center rounded-full border-0 bg-black/60 p-0 outline-none backdrop-blur-md ring-1 ring-white/15 transition hover:bg-black/70 active:scale-[0.99] focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35"
       data-player-control
+      style={{
+        boxShadow: "0 0 0 1px rgba(232,233,56,0.18), 0 18px 45px rgba(0,0,0,0.55)",
+      }}
     >
-      <Image
-        src="/images/play2.png"
-        alt=""
-        width={64}
-        height={64}
-        className="relative z-10 h-12 w-12 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
       />
+      <span aria-hidden="true" className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80" />
+      <span aria-hidden="true" className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md" />
+      <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.06]">
+        <PlayIcon color={color} size={30} />
+      </span>
     </button>
   );
 }
@@ -51,9 +82,10 @@ function ControlButton({
       onClick={onClick}
       aria-label={label}
       aria-pressed={pressed}
-      className="group relative grid size-12 place-items-center rounded-full bg-black/35 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/45 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+      className="group relative grid size-12 place-items-center rounded-full bg-black/60 backdrop-blur-md ring-1 ring-white/15 transition hover:bg-black/70 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35"
+      data-player-control
       style={{
-        boxShadow: "0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)",
+        boxShadow: "0 0 0 1px rgba(232,233,56,0.18), 0 18px 45px rgba(0,0,0,0.55)",
       }}
     >
       <span
@@ -76,9 +108,10 @@ function ControlButton({
 }
 
 export default function DesignsShowcase() {
-  const tealColor = "#6fe7d3";
+  const tealColor = "#E8E938";
 
   const rootRef = useRef<HTMLElement | null>(null);
+  const playerRef = useRef<HTMLDivElement | null>(null);
   const isSmallScreen = useIsMobile(768);
   const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "150px 0px" });
   const siteLoaded = useSiteLoaded();
@@ -99,11 +132,21 @@ export default function DesignsShowcase() {
   const [muted, setMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [userRequestedPlay, setUserRequestedPlay] = useState(false);
-  const [autoplayArmed, setAutoplayArmed] = useState(false);
+  // Autoplay by default once the section is in view (muted), so the design video feels continuous.
+  const [autoplayArmed, setAutoplayArmed] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const pipSupported = typeof document !== "undefined" && document.pictureInPictureEnabled === true;
 
   const autoplayDesired = userRequestedPlay || autoplayArmed;
   const canAttachVideoSrc = canLoadVideo && autoplayDesired;
+
+  const hoverRevealWhenPlaying = isPlaying
+    ? "opacity-0 pointer-events-none translate-y-2 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 transition-[opacity,transform] duration-200 ease-out"
+    : "opacity-100 pointer-events-auto translate-y-0 transition-[opacity,transform] duration-200 ease-out";
 
   const startIndex = useMemo(() => {
     const idx = designs.findIndex((d) => d.title === "brandbook draft");
@@ -215,7 +258,89 @@ export default function DesignsShowcase() {
     }
   }, [near, canAttachVideoSrc, autoplayDesired, isPlaying]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onFs = () => {
+      const fsEl = document.fullscreenElement;
+      const el = playerRef.current;
+      setIsFullscreen(!!fsEl && !!el && fsEl === el);
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    onFs();
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    const onLoadedMetadata = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+    const onTimeUpdate = () => setCurrentTime(v.currentTime || 0);
+    const onDurationChange = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+
+    v.addEventListener("loadedmetadata", onLoadedMetadata);
+    v.addEventListener("timeupdate", onTimeUpdate);
+    v.addEventListener("durationchange", onDurationChange);
+    onLoadedMetadata();
+    onTimeUpdate();
+
+    return () => {
+      v.removeEventListener("loadedmetadata", onLoadedMetadata);
+      v.removeEventListener("timeupdate", onTimeUpdate);
+      v.removeEventListener("durationchange", onDurationChange);
+    };
+  }, [canAttachVideoSrc, firstDesign?.src]);
+
   const toggleMute = () => setMuted((m) => !m);
+
+  const toggleFullscreen = async () => {
+    if (typeof document === "undefined") return;
+    const el = playerRef.current;
+    const v = videoRef.current;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen?.();
+        return;
+      }
+      if (el?.requestFullscreen) {
+        await el.requestFullscreen();
+        return;
+      }
+      if (v && typeof (v as unknown as { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen === "function") {
+        (v as unknown as { webkitEnterFullscreen: () => void }).webkitEnterFullscreen();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const togglePiP = async () => {
+    if (typeof document === "undefined") return;
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      if (document.pictureInPictureElement === v) {
+        await document.exitPictureInPicture?.();
+        return;
+      }
+      if (typeof (v as unknown as { requestPictureInPicture?: () => Promise<void> }).requestPictureInPicture === "function") {
+        await (v as unknown as { requestPictureInPicture: () => Promise<void> }).requestPictureInPicture();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const seekTo = (nextTime: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      v.currentTime = Math.max(0, Math.min(nextTime, Number.isFinite(v.duration) ? v.duration : nextTime));
+      setCurrentTime(v.currentTime || 0);
+    } catch {
+      // ignore
+    }
+  };
 
   const togglePlay = () => {
     const v = videoRef.current;
@@ -304,7 +429,8 @@ export default function DesignsShowcase() {
     >
       <div className="relative w-[96%] md:w-[94%] lg:w-[90%] xl:w-[86%] max-w-[1500px] flex items-center justify-center">
         <div
-          className="relative w-full aspect-[2.05/1] md:aspect-[2.0/1] isolation-isolate"
+          className="group relative w-full aspect-[2.05/1] md:aspect-[2.0/1] isolation-isolate"
+          ref={playerRef}
           onPointerDown={handlePlayerPointerDown}
         >
           {/* SVG layer */}
@@ -442,7 +568,7 @@ export default function DesignsShowcase() {
                         mixBlendMode: "overlay",
                         opacity: 0.45,
                         background:
-                          "radial-gradient(800px 520px at 30% 35%, rgba(111,231,211,0.10), transparent 60%), radial-gradient(900px 520px at 65% 62%, rgba(198,55,108,0.12), transparent 62%), radial-gradient(700px 420px at 88% 90%, rgba(255,220,140,0.08), transparent 60%)",
+                          "radial-gradient(800px 520px at 30% 35%, rgba(232,233,56,0.10), transparent 60%), radial-gradient(900px 520px at 65% 62%, rgba(198,55,108,0.12), transparent 62%), radial-gradient(700px 420px at 88% 90%, rgba(255,220,140,0.08), transparent 60%)",
                       }}
                     />
                   </div>
@@ -472,13 +598,14 @@ export default function DesignsShowcase() {
               className="absolute z-40"
               style={{ left: "50%", top: "48%", transform: "translate(-50%, -50%)" }}
             >
-              <CenterPlayButton onClick={togglePlay} />
+              <CenterPlayButton onClick={togglePlay} color={tealColor} />
             </div>
           ) : null}
 
-          {/* Bottom-right controls: play/pause + mute */}
+          {/* Bottom-right controls: play/pause + mute + fullscreen + PiP */}
           <div
-            className="absolute z-40 flex items-center gap-3"
+            data-player-control
+            className={`absolute z-40 flex items-center gap-3 ${hoverRevealWhenPlaying}`}
             style={{ right: "24px", bottom: "80px" }}
           >
             <ControlButton
@@ -502,7 +629,7 @@ export default function DesignsShowcase() {
                   <path d="M17 5v14" />
                 </svg>
               ) : (
-                <Image src="/images/play2.png" alt="" width={64} height={64} className="h-6 w-6 object-contain" />
+                <PlayIcon color={tealColor} size={24} />
               )}
             </ControlButton>
 
@@ -529,6 +656,80 @@ export default function DesignsShowcase() {
                 )}
               </svg>
             </ControlButton>
+
+            <ControlButton
+              onClick={toggleFullscreen}
+              pressed={isFullscreen}
+              label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={tealColor}
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+              >
+                <path d="M9 3H5a2 2 0 0 0-2 2v4" />
+                <path d="M15 3h4a2 2 0 0 1 2 2v4" />
+                <path d="M9 21H5a2 2 0 0 1-2-2v-4" />
+                <path d="M15 21h4a2 2 0 0 0 2-2v-4" />
+              </svg>
+            </ControlButton>
+
+            {pipSupported ? (
+              <ControlButton onClick={togglePiP} pressed={false} label="Picture in Picture">
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={tealColor}
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+                >
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <rect x="12.5" y="11" width="6" height="5" rx="1" />
+                </svg>
+              </ControlButton>
+            ) : null}
+          </div>
+
+          {/* Seek + time (bottom center) */}
+          <div
+            data-player-control
+            className={`absolute z-40 ${hoverRevealWhenPlaying}`}
+            style={{ left: "50%", bottom: "22px", transform: "translateX(-50%)" }}
+          >
+            <div
+              className="flex items-center gap-3 rounded-full bg-black/60 backdrop-blur-md ring-1 ring-white/15"
+              style={{ padding: "10px 14px" }}
+            >
+              <div
+                className="text-[12px] tracking-[0.14em] text-white/80 whitespace-nowrap"
+                style={{ fontFamily: "var(--font-offbit-101)" }}
+              >
+                {formatTime(currentTime)} / {formatTime(duration)}
+              </div>
+              <input
+                aria-label="Seek"
+                type="range"
+                min={0}
+                max={Math.max(0, Math.floor(duration || 0))}
+                value={Math.min(
+                  Math.max(0, Math.floor(currentTime || 0)),
+                  Math.max(0, Math.floor(duration || 0))
+                )}
+                onChange={(e) => seekTo(Number(e.target.value))}
+                className="h-1 w-[240px] accent-[currentColor]"
+                style={{ color: tealColor }}
+              />
+            </div>
           </div>
 
           {/* === HUD INTERFACE === */}
@@ -540,7 +741,7 @@ export default function DesignsShowcase() {
                 w-[400px] md:w-[520px] lg:w-[620px]
                 h-[66px] md:h-[78px]
                 bg-transparent
-                border border-[#6fe7d3]
+                border border-[#E8E938]
                 rounded-full
                 text-[24px] md:text-[44px]
                 font-extrabold
@@ -569,7 +770,7 @@ export default function DesignsShowcase() {
                 w-[500px] md:w-[520px] lg:w-[620px]
                 h-[56px] md:h-[66px]
                 bg-transparent
-                border border-[#6fe7d3]
+                border border-[#E8E938]
                 rounded-full
                 text-[13px] md:text-[15px]
                 font-extrabold

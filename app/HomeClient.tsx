@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "@/components/nav/Navbar";
 import HeroShell from "@/components/hero/HeroShell";
 import SmoothScrollLenis from "@/components/perf/SmoothScrollLenis";
@@ -17,34 +17,55 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
   const armedOnceRef = useRef(false);
   const isMobile = useIsMobile();
 
-  const [introLocked, setIntroLocked] = useState(false);
-  const introUnlockOnceRef = useRef(false);
+  const [introLocked, setIntroLocked] = useState(() => {
+    if (typeof window === "undefined") return false;
 
-  const [introEligibleDesktop, setIntroEligibleDesktop] = useState(false);
+    const eligible = window.matchMedia?.("(min-width: 1024px)")?.matches ?? false;
+    if (!eligible) return false;
 
-  useLayoutEffect(() => {
-    const mql = window.matchMedia?.("(min-width: 1024px)");
-    const next = mql?.matches ?? false;
-    setIntroEligibleDesktop(next);
-  }, []);
-
-  useLayoutEffect(() => {
-    // Never lock on mobile; only on desktop.
-    if (!introEligibleDesktop) {
-      setIntroLocked(false);
-      return;
-    }
-
-    // Allow forcing the intro while testing: /?intro=1
     const forceIntro = new URLSearchParams(window.location.search).get("intro") === "1";
-
     try {
       const seen = window.localStorage.getItem("slowdrag_intro_seen");
-      if (forceIntro || !seen) setIntroLocked(true);
+      return forceIntro || !seen;
     } catch {
-      // If storage is unavailable, default to no lock.
+      return false;
     }
-  }, [introEligibleDesktop]);
+  });
+  const introUnlockOnceRef = useRef(false);
+
+  const [introEligibleDesktop, setIntroEligibleDesktop] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia?.("(min-width: 1024px)")?.matches ?? false;
+  });
+
+  useEffect(() => {
+    const mql = window.matchMedia?.("(min-width: 1024px)");
+    if (!mql) return;
+
+    const recompute = () => {
+      const eligible = mql.matches;
+      setIntroEligibleDesktop(eligible);
+
+      if (!eligible) {
+        setIntroLocked(false);
+        return;
+      }
+
+      const forceIntro = new URLSearchParams(window.location.search).get("intro") === "1";
+      try {
+        const seen = window.localStorage.getItem("slowdrag_intro_seen");
+        setIntroLocked(forceIntro || !seen);
+      } catch {
+        setIntroLocked(false);
+      }
+    };
+
+    const onChange = () => recompute();
+    if (typeof mql.addEventListener === "function") {
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    }
+  }, []);
 
   const handleIntroUnlock = useCallback(() => {
     if (introUnlockOnceRef.current) return;

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import useIsMobile from "@/components/perf/useIsMobile";
 import useNearViewport from "@/components/perf/useNearViewport";
 import useAfterFirstPaint from "@/components/perf/useAfterFirstPaint";
@@ -13,29 +12,102 @@ type FilmItem = {
   poster?: string;
 };
 
+function formatTime(totalSeconds: number) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "0:00";
+  const clamped = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(clamped / 60);
+  const seconds = clamped % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function PlayIcon({ color, size = 24 }: { color: string; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+    >
+      <path
+        d="M10.15 7.25c0-.9.98-1.45 1.75-.99l7.35 4.49c.74.45.74 1.52 0 1.97l-7.35 4.49c-.77.47-1.75-.09-1.75-.99v-9.97Z"
+        fill={color}
+      />
+    </svg>
+  );
+}
+
 function CenterPlayButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label="Play video"
-      className="group relative grid size-16 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
+      className="group relative grid size-20 place-items-center rounded-full border-0 bg-black/80 supports-[backdrop-filter]:bg-black/60 p-0 outline-none backdrop-blur-md ring-1 ring-white/20 transition hover:bg-black/85 supports-[backdrop-filter]:hover:bg-black/70 active:scale-[0.99] focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+      data-player-control
+      style={{
+        boxShadow: "0 0 0 1px rgba(232,233,56,0.18), 0 18px 45px rgba(0,0,0,0.55)",
+      }}
     >
-      <Image
-        src="/images/play2.png"
-        alt=""
-        width={64}
-        height={64}
-        className="relative z-10 h-10 w-10 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
       />
+      <span aria-hidden="true" className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80" />
+      <span aria-hidden="true" className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md" />
+      <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.06]">
+        <PlayIcon color="#E8E938" size={28} />
+      </span>
+    </button>
+  );
+}
+
+function ControlButton({
+  label,
+  pressed,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={pressed}
+      className="group relative grid size-11 place-items-center rounded-full bg-black/80 supports-[backdrop-filter]:bg-black/60 backdrop-blur-md ring-1 ring-white/20 transition hover:bg-black/85 supports-[backdrop-filter]:hover:bg-black/70 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+      data-player-control
+      style={{
+        boxShadow: "0 0 0 1px rgba(232,233,56,0.18), 0 18px 45px rgba(0,0,0,0.55)",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
+      />
+      <span
+        aria-hidden="true"
+        className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80"
+      />
+      <span
+        aria-hidden="true"
+        className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md"
+      />
+      <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.05]">{children}</span>
     </button>
   );
 }
 
 export default function MobileDesignShowcase() {
-  const tealColor = "#6fe7d3";
+  const tealColor = "#E8E938";
 
   const rootRef = useRef<HTMLElement | null>(null);
+  const playerRef = useRef<HTMLDivElement | null>(null);
   const isSmallScreen = useIsMobile(768);
   const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "150px 0px" });
   const siteLoaded = useSiteLoaded();
@@ -49,14 +121,22 @@ export default function MobileDesignShowcase() {
   }, [isSmallScreen]);
 
   const activeIndex = 0;
-  const [muted] = useState(true);
+  const [muted, setMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [userRequestedPlay, setUserRequestedPlay] = useState(false);
-  const [autoplayArmed, setAutoplayArmed] = useState(false);
+  // Autoplay by default once the section is in view (muted), so the design video feels continuous.
+  const [autoplayArmed, setAutoplayArmed] = useState(true);
+  const [controlsShown, setControlsShown] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const pipSupported = typeof document !== "undefined" && document.pictureInPictureEnabled === true;
 
   const autoplayDesired = userRequestedPlay || autoplayArmed;
   const canAttachVideoSrc = canLoadVideo && autoplayDesired;
+  const controlsVisible = !isPlaying || controlsShown;
 
   // Arm autoplay after the page has settled, to reduce initial-load contention.
   // If the user clicks play, we arm immediately.
@@ -140,7 +220,89 @@ export default function MobileDesignShowcase() {
     }
   }, [near, canAttachVideoSrc, autoplayDesired, isPlaying]);
 
-  // Note: this mobile layout only has a single item; navigation + mute toggle UI is intentionally omitted.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onFs = () => {
+      const fsEl = document.fullscreenElement;
+      const el = playerRef.current;
+      setIsFullscreen(!!fsEl && !!el && fsEl === el);
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    onFs();
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    const onLoadedMetadata = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+    const onTimeUpdate = () => setCurrentTime(v.currentTime || 0);
+    const onDurationChange = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+
+    v.addEventListener("loadedmetadata", onLoadedMetadata);
+    v.addEventListener("timeupdate", onTimeUpdate);
+    v.addEventListener("durationchange", onDurationChange);
+    onLoadedMetadata();
+    onTimeUpdate();
+
+    return () => {
+      v.removeEventListener("loadedmetadata", onLoadedMetadata);
+      v.removeEventListener("timeupdate", onTimeUpdate);
+      v.removeEventListener("durationchange", onDurationChange);
+    };
+  }, [canAttachVideoSrc]);
+
+  const toggleMute = () => setMuted((m) => !m);
+
+  const toggleFullscreen = async () => {
+    if (typeof document === "undefined") return;
+    const el = playerRef.current;
+    const v = videoRef.current;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen?.();
+        return;
+      }
+      if (el?.requestFullscreen) {
+        await el.requestFullscreen();
+        return;
+      }
+      if (v && typeof (v as unknown as { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen === "function") {
+        (v as unknown as { webkitEnterFullscreen: () => void }).webkitEnterFullscreen();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const togglePiP = async () => {
+    if (typeof document === "undefined") return;
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      if (document.pictureInPictureElement === v) {
+        await document.exitPictureInPicture?.();
+        return;
+      }
+      if (typeof (v as unknown as { requestPictureInPicture?: () => Promise<void> }).requestPictureInPicture === "function") {
+        await (v as unknown as { requestPictureInPicture: () => Promise<void> }).requestPictureInPicture();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const seekTo = (nextTime: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      v.currentTime = Math.max(0, Math.min(nextTime, Number.isFinite(v.duration) ? v.duration : nextTime));
+      setCurrentTime(v.currentTime || 0);
+    } catch {
+      // ignore
+    }
+  };
 
   const togglePlay = () => {
     const v = videoRef.current;
@@ -149,6 +311,7 @@ export default function MobileDesignShowcase() {
     if (!v) return;
 
     if (v.paused) {
+      setControlsShown(false);
       const p = v.play();
       if (p) p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
       return;
@@ -166,9 +329,16 @@ export default function MobileDesignShowcase() {
   // =========================
 
   const handlePlayerPointerDown = (e: React.PointerEvent) => {
-    if (!isPlaying) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest?.("[data-player-control]")) return;
+
+    // Mobile UX:
+    // - 1st tap while playing: reveal controls
+    // - 2nd tap (controls already visible): pause
+    if (isPlaying && !controlsVisible) {
+      setControlsShown(true);
+      return;
+    }
 
     const v = videoRef.current;
     if (!v) return;
@@ -255,13 +425,17 @@ export default function MobileDesignShowcase() {
 
           {/* Player (kept same size/shape) */}
           <div className="flex-none pt-1">
-            <div className="relative w-full aspect-[5/3]" onPointerDown={handlePlayerPointerDown}>
+            <div
+              ref={playerRef}
+              className="relative w-full aspect-[5/3]"
+              onPointerDown={handlePlayerPointerDown}
+            >
               <div
                 aria-hidden="true"
                 className="pointer-events-none absolute -inset-5 rounded-[40px] blur-2xl opacity-25"
                 style={{
                   background:
-                    "radial-gradient(55% 55% at 50% 48%, rgba(111,231,211,0.22), transparent 70%)",
+                    "radial-gradient(55% 55% at 50% 48%, rgba(232,233,56,0.22), transparent 70%)",
                 }}
               />
               <svg
@@ -282,7 +456,7 @@ export default function MobileDesignShowcase() {
                 fx="30%"
                 fy="30%"
               >
-                <stop offset="0%" stopColor="rgba(111,231,211,0.35)" />
+                <stop offset="0%" stopColor="rgba(232,233,56,0.35)" />
                 <stop offset="100%" stopColor="transparent" />
               </radialGradient>
               <radialGradient id="grad2" cx="70%" cy="60%" r="60%">
@@ -367,7 +541,7 @@ export default function MobileDesignShowcase() {
                       width: "100%",
                       height: "100%",
                       background:
-                        "radial-gradient(800px 520px at 30% 35%, rgba(111,231,211,0.20), transparent 60%), radial-gradient(900px 520px at 65% 62%, rgba(198,55,108,0.28), transparent 62%), radial-gradient(700px 420px at 88% 90%, rgba(255,220,140,0.18), transparent 60%), #0a0a0a",
+                        "radial-gradient(800px 520px at 30% 35%, rgba(232,233,56,0.20), transparent 60%), radial-gradient(900px 520px at 65% 62%, rgba(198,55,108,0.28), transparent 62%), radial-gradient(700px 420px at 88% 90%, rgba(255,220,140,0.18), transparent 60%), #0a0a0a",
                       opacity: videoOpacity,
                       transition: "opacity 280ms ease",
                     }}
@@ -398,6 +572,82 @@ export default function MobileDesignShowcase() {
               <CenterPlayButton onClick={togglePlay} />
             </div>
           ) : null}
+
+          {/* Bottom-right controls */}
+          <div
+            data-player-control
+            className={`absolute z-40 flex items-center gap-2 transition-[opacity,transform] duration-200 ease-out ${
+              controlsVisible ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-2 pointer-events-none"
+            }`}
+            style={{ right: "14px", bottom: "14px" }}
+          >
+            <ControlButton onClick={toggleMute} pressed={!muted} label={muted ? "Unmute video" : "Mute video"}>
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={tealColor}
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+              >
+                <path d="M11 5L6 9H3v6h3l5 4V5z" />
+                {muted ? (
+                  <path d="M22 9l-7 7" />
+                ) : (
+                  <>
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                    <path d="M18.8 6.2a8.5 8.5 0 0 1 0 11.6" />
+                  </>
+                )}
+              </svg>
+            </ControlButton>
+
+            <ControlButton
+              onClick={toggleFullscreen}
+              pressed={isFullscreen}
+              label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={tealColor}
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+              >
+                <path d="M9 3H5a2 2 0 0 0-2 2v4" />
+                <path d="M15 3h4a2 2 0 0 1 2 2v4" />
+                <path d="M9 21H5a2 2 0 0 1-2-2v-4" />
+                <path d="M15 21h4a2 2 0 0 0 2-2v-4" />
+              </svg>
+            </ControlButton>
+
+            {pipSupported ? (
+              <ControlButton onClick={togglePiP} pressed={false} label="Picture in Picture">
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={tealColor}
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+                >
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <rect x="12.5" y="11" width="6" height="5" rx="1" />
+                </svg>
+              </ControlButton>
+            ) : null}
+          </div>
+
             </div>
           </div>
 
@@ -433,7 +683,7 @@ export default function MobileDesignShowcase() {
                 color: tealColor,
                 backgroundColor: "rgba(0,0,0,0.22)",
                 boxShadow:
-                  "0 0 0 1px rgba(111,231,211,0.65), 0 18px 45px rgba(0,0,0,0.55)",
+                  "0 0 0 1px rgba(232,233,56,0.65), 0 18px 45px rgba(0,0,0,0.55)",
               }}
             >
               <span

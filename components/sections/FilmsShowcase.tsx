@@ -13,21 +13,60 @@ type FilmItem = {
   poster?: string;
 };
 
-function CenterPlayButton({ onClick }: { onClick: () => void }) {
+function formatTime(totalSeconds: number) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "0:00";
+  const s = Math.floor(totalSeconds);
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+function PlayIcon({ color, size = 24 }: { color: string; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+    >
+      <path
+        d="M10.15 7.25c0-.9.98-1.45 1.75-.99l7.35 4.49c.74.45.74 1.52 0 1.97l-7.35 4.49c-.77.47-1.75-.09-1.75-.99v-9.97Z"
+        fill={color}
+      />
+    </svg>
+  );
+}
+
+function CenterPlayButton({ onClick, color }: { onClick: () => void; color: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label="Play video"
-      className="group relative grid size-16 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition active:scale-[0.99] focus:outline-none focus-visible:outline-none"
+      className="group relative grid size-20 place-items-center rounded-full border-0 bg-black/60 p-0 outline-none backdrop-blur-md ring-1 ring-white/15 transition hover:bg-black/70 active:scale-[0.99] focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35"
+      data-player-control
+      style={{
+        boxShadow:
+          "0 0 0 1px rgba(232,233,56,0.18), 0 18px 45px rgba(0,0,0,0.55)",
+      }}
     >
-      <Image
-        src="/images/play2.png"
-        alt=""
-        width={64}
-        height={64}
-        className="relative z-10 h-10 w-10 border-0 object-contain drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] transition-transform duration-200 group-hover:scale-[1.06]"
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-white/10 to-transparent opacity-75 transition-opacity duration-200 group-hover:opacity-95"
       />
+      <span
+        aria-hidden="true"
+        className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/5 to-black/50 opacity-80"
+      />
+      <span
+        aria-hidden="true"
+        className="absolute top-[10%] left-1/2 h-[36%] w-[72%] -translate-x-1/2 rounded-full bg-white/10 blur-md"
+      />
+      <span className="relative z-10 transition-transform duration-200 group-hover:scale-[1.06]">
+        <PlayIcon color={color} size={30} />
+      </span>
     </button>
   );
 }
@@ -49,10 +88,10 @@ function ControlButton({
       onClick={onClick}
       aria-label={label}
       aria-pressed={pressed}
-      className="group relative grid size-12 place-items-center rounded-full bg-black/35 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/45 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+      className="group relative grid size-12 place-items-center rounded-full bg-black/60 backdrop-blur-md ring-1 ring-white/15 transition hover:bg-black/70 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35"
       style={{
         boxShadow:
-          "0 0 0 1px rgba(111,231,211,0.18), 0 18px 45px rgba(0,0,0,0.55)",
+          "0 0 0 1px rgba(232,233,56,0.18), 0 18px 45px rgba(0,0,0,0.55)",
       }}
     >
       <span
@@ -75,9 +114,10 @@ function ControlButton({
 }
 
 export default function FilmsShowcase() {
-  const tealColor = "#6fe7d3";
+  const tealColor = "#E8E938";
 
   const rootRef = useRef<HTMLElement | null>(null);
+  const playerRef = useRef<HTMLDivElement | null>(null);
   const isMobile = useIsMobile(768);
   const near = useNearViewport(rootRef as unknown as React.RefObject<HTMLElement>, { rootMargin: "150px 0px" });
   const siteLoaded = useSiteLoaded();
@@ -106,8 +146,16 @@ export default function FilmsShowcase() {
   const [muted, setMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [userRequestedPlay, setUserRequestedPlay] = useState(false);
-  const [autoplayArmed, setAutoplayArmed] = useState(false);
+  // Autoplay by default once the section is in view (muted), so videos feel continuous.
+  const [autoplayArmed, setAutoplayArmed] = useState(true);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const pipSupported =
+    typeof document !== "undefined" &&
+    (document as unknown as { pictureInPictureEnabled?: boolean }).pictureInPictureEnabled === true;
 
   const autoplayDesired = userRequestedPlay || autoplayArmed;
   const canAttachVideoSrc = canLoadVideo && autoplayDesired;
@@ -160,6 +208,39 @@ export default function FilmsShowcase() {
       else window.clearTimeout(handle);
     };
   }, [canLoadVideo, userRequestedPlay, autoplayArmed]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onFs = () => {
+      const fsEl = document.fullscreenElement;
+      const el = playerRef.current;
+      setIsFullscreen(!!fsEl && !!el && fsEl === el);
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    onFs();
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    const onLoadedMetadata = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+    const onTimeUpdate = () => setCurrentTime(v.currentTime || 0);
+    const onDurationChange = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+
+    v.addEventListener("loadedmetadata", onLoadedMetadata);
+    v.addEventListener("timeupdate", onTimeUpdate);
+    v.addEventListener("durationchange", onDurationChange);
+    onLoadedMetadata();
+    onTimeUpdate();
+
+    return () => {
+      v.removeEventListener("loadedmetadata", onLoadedMetadata);
+      v.removeEventListener("timeupdate", onTimeUpdate);
+      v.removeEventListener("durationchange", onDurationChange);
+    };
+  }, [canAttachVideoSrc, activeIndex]);
 
   // When activeIndex changes, force reload + play from start
   useEffect(() => {
@@ -228,6 +309,55 @@ export default function FilmsShowcase() {
 
   const toggleMute = () => setMuted((m) => !m);
 
+  const toggleFullscreen = async () => {
+    const v = videoRef.current as unknown as { webkitEnterFullscreen?: () => void } | null;
+    if (v?.webkitEnterFullscreen) {
+      try {
+        v.webkitEnterFullscreen();
+      } catch {}
+      return;
+    }
+
+    const el = playerRef.current as unknown as { requestFullscreen?: () => Promise<void> } | null;
+    if (!el) return;
+
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {}
+      return;
+    }
+
+    try {
+      await el.requestFullscreen?.();
+    } catch {}
+  };
+
+  const togglePiP = async () => {
+    if (!pipSupported) return;
+    const v = videoRef.current as unknown as { requestPictureInPicture?: () => Promise<void> } | null;
+    if (!v?.requestPictureInPicture) return;
+
+    const anyDoc = document as unknown as { pictureInPictureElement?: Element | null; exitPictureInPicture?: () => Promise<void> };
+    try {
+      if (anyDoc.pictureInPictureElement) {
+        await anyDoc.exitPictureInPicture?.();
+        return;
+      }
+      await v.requestPictureInPicture();
+    } catch {}
+  };
+
+  const seekTo = (nextTime: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (!Number.isFinite(nextTime)) return;
+    try {
+      v.currentTime = Math.max(0, Math.min(nextTime, Number.isFinite(v.duration) ? v.duration : nextTime));
+      setCurrentTime(v.currentTime || 0);
+    } catch {}
+  };
+
   const togglePlay = () => {
     const v = videoRef.current;
     setUserRequestedPlay(true);
@@ -246,6 +376,10 @@ export default function FilmsShowcase() {
 
   const active = films[activeIndex];
   const videoOpacity = phase === "out" ? 0 : 1;
+
+  const hoverRevealWhenPlaying = isPlaying
+    ? "opacity-0 pointer-events-none translate-y-2 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 transition-[opacity,transform] duration-200 ease-out"
+    : "opacity-100 pointer-events-auto translate-y-0 transition-[opacity,transform] duration-200 ease-out";
 
   // =========================
   // ✅ DESKTOP/TABLET LAYOUT
@@ -315,8 +449,9 @@ export default function FilmsShowcase() {
 
       <div className="relative w-[95%] md:w-[90%] lg:w-[80%] xl:w-[70%] max-w-[1200px] flex items-center justify-center z-10">
         <div
-          className="relative w-full aspect-[5/3]"
+          className="group relative w-full aspect-[5/3]"
           onPointerDown={handlePlayerPointerDown}
+          ref={playerRef}
         >
           <svg
             viewBox="0 0 1000 600"
@@ -336,7 +471,7 @@ export default function FilmsShowcase() {
                 fx="30%"
                 fy="30%"
               >
-                <stop offset="0%" stopColor="rgba(111,231,211,0.35)" />
+                <stop offset="0%" stopColor="rgba(232,233,56,0.35)" />
                 <stop offset="100%" stopColor="transparent" />
               </radialGradient>
               <radialGradient id="grad2" cx="70%" cy="60%" r="60%">
@@ -423,7 +558,7 @@ export default function FilmsShowcase() {
                       width: "100%",
                       height: "100%",
                       background:
-                        "radial-gradient(800px 520px at 30% 35%, rgba(111,231,211,0.20), transparent 60%), radial-gradient(900px 520px at 65% 62%, rgba(198,55,108,0.28), transparent 62%), radial-gradient(700px 420px at 88% 90%, rgba(255,220,140,0.18), transparent 60%), #0a0a0a",
+                        "radial-gradient(800px 520px at 30% 35%, rgba(232,233,56,0.20), transparent 60%), radial-gradient(900px 520px at 65% 62%, rgba(198,55,108,0.28), transparent 62%), radial-gradient(700px 420px at 88% 90%, rgba(255,220,140,0.18), transparent 60%), #0a0a0a",
                       opacity: videoOpacity,
                       transition: "opacity 280ms ease",
                     }}
@@ -444,19 +579,19 @@ export default function FilmsShowcase() {
           {!isPlaying ? (
             <div
               data-player-control
-              className="absolute z-40"
+              className={`absolute z-40 ${hoverRevealWhenPlaying}`}
               style={{
                 left: "50%",
                 top: "48%",
                 transform: "translate(-50%, -50%)",
               }}
             >
-              <CenterPlayButton onClick={togglePlay} />
+              <CenterPlayButton onClick={togglePlay} color={tealColor} />
             </div>
           ) : null}
 
           {/* Top Left Pill */}
-          <div data-player-control className="absolute top-[10%] left-[2.5%] z-30">
+          <div data-player-control className={`absolute top-[10%] left-[2.5%] z-30 ${hoverRevealWhenPlaying}`}>
             <div className="relative group">
               <div
                 className="absolute inset-0 blur-md opacity-20 group-hover:opacity-40 transition-opacity rounded-full"
@@ -483,40 +618,113 @@ export default function FilmsShowcase() {
           {/* Audio Control (bottom-right) */}
           <div
             data-player-control
-            className="absolute z-40 flex items-center"
+            className={`absolute z-40 flex items-center ${hoverRevealWhenPlaying}`}
             style={{ right: "24px", bottom: "80px" }}
           >
-            <ControlButton
-              onClick={toggleMute}
-              pressed={!muted}
-              label={muted ? "Unmute video" : "Mute video"}
-            >
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke={tealColor}
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+            <div className="flex items-center gap-3">
+              <ControlButton
+                onClick={toggleMute}
+                pressed={!muted}
+                label={muted ? "Unmute video" : "Mute video"}
               >
-                <path d="M11 5L6 9H3v6h3l5 4V5z" />
-                {muted ? (
-                  <path d="M22 9l-7 7" />
-                ) : (
-                  <>
-                    <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-                    <path d="M18.8 6.2a8.5 8.5 0 0 1 0 11.6" />
-                  </>
-                )}
-              </svg>
-            </ControlButton>
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={tealColor}
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+                >
+                  <path d="M11 5L6 9H3v6h3l5 4V5z" />
+                  {muted ? (
+                    <path d="M22 9l-7 7" />
+                  ) : (
+                    <>
+                      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                      <path d="M18.8 6.2a8.5 8.5 0 0 1 0 11.6" />
+                    </>
+                  )}
+                </svg>
+              </ControlButton>
+
+              <ControlButton
+                onClick={toggleFullscreen}
+                pressed={isFullscreen}
+                label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              >
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={tealColor}
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+                >
+                  <path d="M9 3H5a2 2 0 0 0-2 2v4" />
+                  <path d="M15 3h4a2 2 0 0 1 2 2v4" />
+                  <path d="M9 21H5a2 2 0 0 1-2-2v-4" />
+                  <path d="M15 21h4a2 2 0 0 0 2-2v-4" />
+                </svg>
+              </ControlButton>
+
+              {pipSupported ? (
+                <ControlButton onClick={togglePiP} pressed={false} label="Picture in Picture">
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke={tealColor}
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+                  >
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <rect x="12.5" y="11" width="6" height="5" rx="1" />
+                  </svg>
+                </ControlButton>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Seek + time (bottom center) */}
+          <div
+            data-player-control
+            className={`absolute z-40 ${hoverRevealWhenPlaying}`}
+            style={{ left: "50%", bottom: "22px", transform: "translateX(-50%)" }}
+          >
+            <div
+              className="flex items-center gap-3 rounded-full bg-black/60 backdrop-blur-md ring-1 ring-white/15"
+              style={{ padding: "10px 14px" }}
+            >
+              <div
+                className="text-[12px] tracking-[0.14em] text-white/80 whitespace-nowrap"
+                style={{ fontFamily: "var(--font-offbit-101)" }}
+              >
+                {formatTime(currentTime)} / {formatTime(duration)}
+              </div>
+              <input
+                aria-label="Seek"
+                type="range"
+                min={0}
+                max={Math.max(0, Math.floor(duration || 0))}
+                value={Math.min(Math.max(0, Math.floor(currentTime || 0)), Math.max(0, Math.floor(duration || 0)))}
+                onChange={(e) => seekTo(Number(e.target.value))}
+                className="h-1 w-[240px] accent-[currentColor]"
+                style={{ color: tealColor }}
+              />
+            </div>
           </div>
 
           {/* Bottom Right CTA */}
-          <div data-player-control className="absolute bottom-[6%] right-[3%] z-30">
+          <div data-player-control className={`absolute bottom-[6%] right-[3%] z-30 ${hoverRevealWhenPlaying}`}>
             <button
               type="button"
               className="relative w-[450px] h-[48px] px-8 py-3 rounded-full text-base font-bold tracking-[0.25em] text-white transition-all flex items-center justify-end"
@@ -539,7 +747,7 @@ export default function FilmsShowcase() {
             data-player-control
             type="button"
             onClick={prev}
-            className="group absolute top-1/2 -translate-y-1/2 z-50 bg-transparent border-none p-0 focus:outline-none"
+            className={`group absolute top-1/2 -translate-y-1/2 z-50 bg-transparent border-none p-0 focus:outline-none ${hoverRevealWhenPlaying}`}
             style={{ left: "-60px" }}
             aria-label="Previous"
           >
@@ -557,7 +765,7 @@ export default function FilmsShowcase() {
             data-player-control
             type="button"
             onClick={next}
-            className="group absolute top-1/2 -translate-y-1/2 z-50 bg-transparent border-none p-0 focus:outline-none"
+            className={`group absolute top-1/2 -translate-y-1/2 z-50 bg-transparent border-none p-0 focus:outline-none ${hoverRevealWhenPlaying}`}
             style={{ right: "-60px" }}
             aria-label="Next"
           >

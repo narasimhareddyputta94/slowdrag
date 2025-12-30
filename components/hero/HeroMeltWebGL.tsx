@@ -742,7 +742,7 @@ export default function HeroMeltWebGL({
       io.disconnect();
       cleanup?.();
     };
-  }, [afterFirstPaint, imageSrc, siteLoaded]);
+  }, [afterFirstPaint, imageSrc, introAutoplay, siteLoaded]);
 
   const [isSmallScreen, setIsSmallScreen] = useState(false);
 
@@ -757,10 +757,6 @@ export default function HeroMeltWebGL({
       mql.addEventListener("change", onChange);
       return () => mql.removeEventListener("change", onChange);
     }
-
-    // Legacy Safari
-    mql.addListener(onChange);
-    return () => mql.removeListener(onChange);
   }, []);
 
   const edgePad = "clamp(12px, 3.2vw, 36px)";
