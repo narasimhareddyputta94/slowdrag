@@ -61,11 +61,9 @@ export const metadata: Metadata = {
   },
 
   icons: {
-    icon: [
-      { url: "/favicon.ico" },
-      { url: "/icon.png", type: "image/png" },
-    ],
-    apple: [{ url: "/apple-icon.png" }],
+    icon: [{ url: "/images/logo.png", type: "image/png" }],
+    shortcut: [{ url: "/images/logo.png", type: "image/png" }],
+    apple: [{ url: "/images/logo.png", type: "image/png" }],
   },
 
   // Optional: if you want PWA-ish polish
