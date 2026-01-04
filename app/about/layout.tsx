@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Footer from "@/components/footer/Footer";
 
 export const metadata: Metadata = {
   title: "About Us",
@@ -35,5 +36,10 @@ export default function AboutLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return (
+    <>
+      {children}
+      <Footer />
+    </>
+  );
 }
