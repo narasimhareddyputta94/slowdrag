@@ -1,11 +1,39 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect } from "react";
 import Navbar from "@/components/nav/Navbar";
 
 export default function AboutPage() {
   const brandColor = "#c6376c";
   const showNav = true;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>("[data-about-reveal]"));
+    if (nodes.length === 0) return;
+
+    if (reduceMotion || typeof IntersectionObserver === "undefined") {
+      nodes.forEach((el) => el.classList.add("about-reveal--in"));
+      return;
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          (entry.target as HTMLElement).classList.add("about-reveal--in");
+          io.unobserve(entry.target);
+        }
+      },
+      { root: null, threshold: 0.18, rootMargin: "0px 0px -10% 0px" }
+    );
+
+    nodes.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
 
   // Updated path: Increased the starting X values to pull the left side inward
   const contactShapePath = `
@@ -129,86 +157,349 @@ Z
         </div>
 
         {/* Team */}
-        <section
-          className="mx-auto max-w-7xl px-6 pb-16 sm:px-10 sm:pb-20"
-          style={{ fontFamily: "var(--font-offbit)" }}
-          aria-label="Team"
-        >
-          <div className="grid grid-cols-2 gap-2 sm:gap-4">
-            <article className="w-full text-center flex flex-col items-center">
-              <div className="w-full max-w-[18rem] sm:max-w-[20rem] md:max-w-[22rem] overflow-hidden rounded-[24px]">
-                <Image
-                  src="/images/sathakshi.png"
-                  alt="Shatakshi"
-                  width={1200}
-                  height={1200}
-                  sizes="(max-width: 768px) 92vw, 520px"
-                  className="h-auto w-full object-cover"
-                  priority={false}
-                />
-              </div>
-              <div className="mt-3 space-y-2 max-w-[34rem]">
-                <div className="text-[24px] tracking-[0.08em] text-white">Shatakshi</div>
-                <div className="text-[12px] tracking-[0.28em] text-white/80 uppercase">Head of Marketing</div>
-                <p
-                  className="text-white/90 leading-relaxed"
-                  style={{ whiteSpace: "pre-line", fontSize: "clamp(16px, 1.4vw, 20px)" }}
-                >
-                  {`Shatakshi is an
-equal parts liberal arts
-scholar and fine arts
-practitioner. Carries
-both the lenses of the
-analytical and the
-artistic into every
-frame, blending
-cultural insight with
-visual storytelling.
-Scholar by degree,
-filmmaker by
-obsession.`}
-                </p>
-              </div>
-            </article>
+<section
+  className="mx-auto max-w-7xl px-6 pb-16 sm:px-10 sm:pb-20"
+  style={{ fontFamily: "var(--font-offbit)" }}
+  aria-label="Team"
+>
+  <div className="mb-10 text-center">
+    <div className="text-[12px] tracking-[0.38em] text-white/70 uppercase">The Team</div>
+    <h2 className="mt-3 text-[28px] sm:text-[34px] tracking-[0.06em] text-white">
+      People behind the work
+    </h2>
+    <p className="mx-auto mt-3 max-w-2xl text-white/70 text-[14px] sm:text-[16px] leading-relaxed">
+      Craft, taste, and a little chaos — presented with intention.
+    </p>
+  </div>
 
-            <article className="w-full text-center flex flex-col items-center">
-              <div className="w-full max-w-[18rem] sm:max-w-[20rem] md:max-w-[22rem] overflow-hidden rounded-[24px]">
-                <Image
-                  src="/images/sujith.png"
-                  alt="Sujith"
-                  width={1200}
-                  height={1200}
-                  sizes="(max-width: 768px) 92vw, 520px"
-                  className="h-auto w-full object-cover"
-                  priority={false}
-                />
-              </div>
-              <div className="mt-3 space-y-2 max-w-[34rem]">
-                <div className="text-[24px] tracking-[0.08em] text-white">Sujith</div>
-                <div className="text-[12px] tracking-[0.28em] text-white/80 uppercase">Head of Creatives</div>
-                <p
-                  className="text-white/90 leading-relaxed"
-                  style={{ whiteSpace: "pre-line", fontSize: "clamp(16px, 1.4vw, 20px)" }}
-                >
-                  {`Sujith turns cameras
-into portals and
-stories into worlds.
-Frames are his
-playground, light is
-his language. A
-cinephile by heart,
-cinematographer by
-craft and a complete
-visionary by design.
-Snacks disappear
-faster than his
-dialogues but his
-silence says aplenty.`}
-                </p>
-              </div>
-            </article>
-          </div>
-        </section>
+  <div className="grid grid-cols-2 gap-6 md:gap-8">
+    {/* Card 1 */}
+    <article
+      data-about-reveal
+      className="team-card about-reveal"
+      style={{ transitionDelay: "80ms" }}
+      onPointerMove={(e) => {
+        const el = e.currentTarget;
+        const r = el.getBoundingClientRect();
+        const x = ((e.clientX - r.left) / r.width) * 100;
+        const y = ((e.clientY - r.top) / r.height) * 100;
+        el.style.setProperty("--mx", `${x}%`);
+        el.style.setProperty("--my", `${y}%`);
+      }}
+    >
+      <div className="team-media">
+        <div className="team-mediaFrame">
+          <Image
+            src="/images/sathakshi.png"
+            alt="Shatakshi"
+            width={1400}
+            height={1400}
+            sizes="(max-width: 768px) 92vw, 520px"
+            className="team-img"
+            priority={false}
+          />
+        </div>
+      </div>
+
+      <div className="team-body">
+        <div className="team-nameRow">
+          <div className="team-name">Shatakshi</div>
+          <div className="team-role">Head of Marketing</div>
+        </div>
+
+        <p className="team-bio">
+          {`Shatakshi is an equal parts liberal arts scholar and fine arts practitioner. Carries both the lenses of the analytical and the artistic into every frame, blending cultural insight with visual storytelling. Scholar by degree, filmmaker by obsession.`}
+        </p>
+
+        <div className="team-footer">
+          <span className="team-chip">Strategy</span>
+          <span className="team-chip">Culture</span>
+          <span className="team-chip">Narrative</span>
+        </div>
+      </div>
+    </article>
+
+    {/* Card 2 */}
+    <article
+      data-about-reveal
+      className="team-card about-reveal"
+      style={{ transitionDelay: "180ms" }}
+      onPointerMove={(e) => {
+        const el = e.currentTarget;
+        const r = el.getBoundingClientRect();
+        const x = ((e.clientX - r.left) / r.width) * 100;
+        const y = ((e.clientY - r.top) / r.height) * 100;
+        el.style.setProperty("--mx", `${x}%`);
+        el.style.setProperty("--my", `${y}%`);
+      }}
+    >
+      <div className="team-media">
+        <div className="team-mediaFrame">
+          <Image
+            src="/images/sujith.png"
+            alt="Sujith"
+            width={1400}
+            height={1400}
+            sizes="(max-width: 768px) 92vw, 520px"
+            className="team-img"
+            priority={false}
+          />
+        </div>
+      </div>
+
+      <div className="team-body">
+        <div className="team-nameRow">
+          <div className="team-name">Sujith</div>
+          <div className="team-role">Head of Creatives</div>
+        </div>
+
+        <p className="team-bio">
+          {`Sujith turns cameras into portals and stories into worlds. Frames are his playground, light is his language. A cinephile by heart, cinematographer by craft and a complete visionary by design. Snacks disappear faster than his dialogues but his silence says aplenty.`}
+        </p>
+
+        <div className="team-footer">
+          <span className="team-chip">Direction</span>
+          <span className="team-chip">Cinematography</span>
+          <span className="team-chip">Taste</span>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+        <style>{`
+  /* Reveal (upgraded: blur + smoother easing) */
+  .about-reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(8px);
+    transition:
+      opacity 900ms cubic-bezier(0.16, 1, 0.3, 1),
+      transform 900ms cubic-bezier(0.16, 1, 0.3, 1),
+      filter 900ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform, filter;
+  }
+  .about-reveal.about-reveal--in {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+
+  /* Team cards */
+  .team-card {
+    --mx: 50%;
+    --my: 35%;
+    position: relative;
+    border-radius: 28px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow:
+      0 10px 40px rgba(0,0,0,0.45),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+    transition:
+      transform 350ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 350ms cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 350ms cubic-bezier(0.16, 1, 0.3, 1);
+    transform-style: preserve-3d;
+  }
+
+  /* Spotlight that follows pointer */
+  .team-card::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    background:
+      radial-gradient(600px circle at var(--mx) var(--my),
+        rgba(200,120,255,0.22),
+        rgba(120,255,255,0.12),
+        rgba(0,0,0,0) 60%);
+    opacity: 0;
+    transition: opacity 300ms ease;
+    pointer-events: none;
+  }
+
+  /* Subtle animated “sheen” edge */
+  .team-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(120deg,
+        rgba(255,255,255,0) 0%,
+        rgba(255,255,255,0.08) 35%,
+        rgba(255,255,255,0) 70%);
+    transform: translateX(-120%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .team-card:hover {
+    transform: translateY(-6px) rotateX(1.2deg);
+    border-color: rgba(255,255,255,0.18);
+    box-shadow:
+      0 18px 70px rgba(0,0,0,0.6),
+      0 0 0 1px rgba(198,55,108,0.20),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .team-card:hover::before { opacity: 1; }
+  .team-card:hover::after {
+    opacity: 1;
+    animation: teamSheen 900ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+  }
+
+  @keyframes teamSheen {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(120%); }
+  }
+
+  .team-media {
+    padding: 18px 18px 0 18px;
+  }
+
+  .team-mediaFrame {
+    position: relative;
+    border-radius: 24px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.04);
+    max-width: clamp(200px, 22vw, 260px);
+    margin: 0 auto;
+  }
+
+  /* Image feels more “editorial”: slightly muted until hover */
+  .team-img {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    transform: scale(1.02);
+    filter: grayscale(15%) contrast(0.95) brightness(0.92);
+    transition:
+      transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
+      filter 500ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform, filter;
+  }
+  .team-card:hover .team-img {
+    transform: scale(1.06);
+    filter: grayscale(0%) contrast(1.05) brightness(1.02);
+  }
+
+  /* Tiny noise overlay for premium texture */
+  .team-mediaFrame::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.12'/%3E%3C/svg%3E");
+    opacity: 0.18;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+  }
+
+  .team-body {
+    padding: 16px 18px 18px 18px;
+    text-align: center;
+  }
+
+  .team-nameRow {
+    margin-top: 8px;
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+  }
+
+  .team-name {
+    font-size: 24px;
+    letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.96);
+    position: relative;
+    display: inline-block;
+    padding-bottom: 8px;
+  }
+
+  /* Underline anim */
+  .team-name::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: 44px;
+    height: 2px;
+    transform: translateX(-50%) scaleX(0.55);
+    transform-origin: center;
+    background: linear-gradient(90deg,
+      rgba(120,255,255,0.0),
+      rgba(120,255,255,0.9),
+      rgba(200,120,255,0.9),
+      rgba(200,120,255,0.0));
+    opacity: 0.65;
+    transition: transform 350ms cubic-bezier(0.16, 1, 0.3, 1), opacity 350ms ease;
+  }
+  .team-card:hover .team-name::after {
+    transform: translateX(-50%) scaleX(1);
+    opacity: 1;
+  }
+
+  .team-role {
+    font-size: 12px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.70);
+  }
+
+  .team-bio {
+    margin: 14px auto 0 auto;
+    max-width: 34rem;
+    color: rgba(255,255,255,0.86);
+    line-height: 1.75;
+    font-size: clamp(14px, 1.05vw, 18px);
+  }
+
+  .team-footer {
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .team-chip {
+    font-size: 11px;
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+    padding: 10px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.75);
+    transition:
+      transform 250ms cubic-bezier(0.16, 1, 0.3, 1),
+      background 250ms ease,
+      border-color 250ms ease;
+  }
+  .team-card:hover .team-chip {
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.16);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .about-reveal {
+      opacity: 1 !important;
+      transform: none !important;
+      filter: none !important;
+      transition: none !important;
+    }
+    .team-card,
+    .team-img,
+    .team-name::after,
+    .team-card::before,
+    .team-card::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+`}</style>
+
       </section>
     </main>
   );

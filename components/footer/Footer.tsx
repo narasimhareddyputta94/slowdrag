@@ -2,7 +2,6 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 
-// ✅ SETTING: Icon color set to Black
 const ICON = "#000000"; 
 
 /* swap these with your real URLs */
