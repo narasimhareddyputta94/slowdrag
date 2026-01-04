@@ -115,6 +115,7 @@ function ControlButton({
 
 export default function FilmsShowcase() {
   const tealColor = "#E8E938";
+  const seaGreenBorder = "seagreen";
 
   const rootRef = useRef<HTMLElement | null>(null);
   const playerRef = useRef<HTMLDivElement | null>(null);
@@ -600,7 +601,7 @@ export default function FilmsShowcase() {
           ) : null}
 
           {/* Top Left Pill */}
-          <div data-player-control className={`absolute top-[10%] left-[2.5%] z-30 ${hoverRevealWhenPlaying}`}>
+          <div data-player-control className="absolute top-[10%] left-[2.5%] z-30">
             <div className="relative group">
               <div
                 className="absolute inset-0 blur-md opacity-20 group-hover:opacity-40 transition-opacity rounded-full"
@@ -614,7 +615,7 @@ export default function FilmsShowcase() {
                   color: "#fff",
                   backdropFilter: "blur(12px)",
                   WebkitBackdropFilter: "blur(12px)",
-                  border: `3px solid ${tealColor}`,
+                  border: `3px solid ${seaGreenBorder}`,
                   left: "-130px",
                   bottom: "-20px",
                 }}
@@ -733,7 +734,7 @@ export default function FilmsShowcase() {
           </div>
 
           {/* Bottom Right CTA */}
-          <div data-player-control className={`absolute bottom-[6%] right-[3%] z-30 ${hoverRevealWhenPlaying}`}>
+          <div data-player-control className="absolute bottom-[6%] right-[3%] z-30">
             <button
               type="button"
               className="relative w-[450px] h-[48px] px-8 py-3 rounded-full text-base font-bold tracking-[0.25em] text-white transition-all flex items-center justify-end"
@@ -742,7 +743,7 @@ export default function FilmsShowcase() {
                 color: "#fff",
                 backdropFilter: "blur(12px)",
                 WebkitBackdropFilter: "blur(12px)",
-                border: `3px solid ${tealColor}`,
+                border: `3px solid ${seaGreenBorder}`,
                 right: "-110px",
                 bottom: "-40px",
               }}
@@ -756,7 +757,7 @@ export default function FilmsShowcase() {
             data-player-control
             type="button"
             onClick={prev}
-            className={`group absolute top-1/2 -translate-y-1/2 z-50 bg-transparent border-none p-0 focus:outline-none ${hoverRevealWhenPlaying}`}
+            className="group absolute top-1/2 -translate-y-1/2 z-50 bg-transparent border-none p-0 focus:outline-none"
             style={{ left: "-60px" }}
             aria-label="Previous"
           >
@@ -774,7 +775,7 @@ export default function FilmsShowcase() {
             data-player-control
             type="button"
             onClick={next}
-            className={`group absolute top-1/2 -translate-y-1/2 z-50 bg-transparent border-none p-0 focus:outline-none ${hoverRevealWhenPlaying}`}
+            className="group absolute top-1/2 -translate-y-1/2 z-50 bg-transparent border-none p-0 focus:outline-none"
             style={{ right: "-60px" }}
             aria-label="Next"
           >

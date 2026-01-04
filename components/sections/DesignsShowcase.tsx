@@ -754,7 +754,7 @@ export default function DesignsShowcase() {
                 w-[400px] md:w-[520px] lg:w-[620px]
                 h-[66px] md:h-[78px]
                 bg-transparent
-                border border-[#E8E938]
+                border
                 rounded-full
                 text-[24px] md:text-[44px]
                 font-extrabold
@@ -768,7 +768,7 @@ export default function DesignsShowcase() {
                 flex items-center justify-start
                 pointer-events-auto
               "
-              style={{ color: "#dba9a9ff" }}
+              style={{ color: "#dba9a9ff", borderColor: "skyblue" }}
             >
               <span className="ml-[40px] md:ml-[110px] lg:ml-[130px]">
                 DESIGN
@@ -783,7 +783,7 @@ export default function DesignsShowcase() {
                 w-[500px] md:w-[520px] lg:w-[620px]
                 h-[56px] md:h-[66px]
                 bg-transparent
-                border border-[#E8E938]
+                border
                 rounded-full
                 text-[13px] md:text-[15px]
                 font-extrabold
@@ -796,7 +796,7 @@ export default function DesignsShowcase() {
                 select-none
                 pointer-events-auto
               "
-              style={{ color: "#ffffff" }}
+              style={{ color: "#ffffff", borderColor: "skyblue" }}
             >
               MAKE US A PART OF YOUR STORY TELLING
             </button>
