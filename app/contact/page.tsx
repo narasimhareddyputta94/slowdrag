@@ -65,11 +65,11 @@ export default function ContactPage() {
       <section
         style={{
           minHeight: "100vh",
-          paddingTop: 140,
-          paddingBottom: 60,
+          paddingTop: "8.75rem",
+          paddingBottom: "3.75rem",
         }}
       >
-        <div className="mx-auto max-w-[1400px] px-6 md:px-16">
+        <div className="mx-auto max-w-[87.5rem] px-6 md:px-16">
           <div className="grid gap-10 lg:gap-16 lg:grid-cols-[1.35fr_0.65fr]">
             
             {/* Left: form card */}
@@ -78,8 +78,8 @@ export default function ContactPage() {
                 className="contact-card"
                 style={{
                   position: "relative",
-                  minHeight: "680px", // Base height
-                  borderRadius: 44,
+                  minHeight: "42.5rem", // Base height
+                  borderRadius: "2.75rem",
                   display: "flex",
                   flexDirection: "column",
                   color: "#0b0b0b",
