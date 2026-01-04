@@ -293,14 +293,13 @@ Z
     border-radius: 28px;
     overflow: hidden;
     background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.10);
+    border: 0;
     box-shadow:
       0 10px 40px rgba(0,0,0,0.45),
       inset 0 1px 0 rgba(255,255,255,0.06);
     transition:
       transform 350ms cubic-bezier(0.16, 1, 0.3, 1),
-      box-shadow 350ms cubic-bezier(0.16, 1, 0.3, 1),
-      border-color 350ms cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow 350ms cubic-bezier(0.16, 1, 0.3, 1);
     transform-style: preserve-3d;
   }
 
@@ -336,10 +335,8 @@ Z
 
   .team-card:hover {
     transform: translateY(-6px) rotateX(1.2deg);
-    border-color: rgba(255,255,255,0.18);
     box-shadow:
       0 18px 70px rgba(0,0,0,0.6),
-      0 0 0 1px rgba(198,55,108,0.20),
       inset 0 1px 0 rgba(255,255,255,0.08);
   }
   .team-card:hover::before { opacity: 1; }
@@ -469,17 +466,15 @@ Z
     padding: 10px 12px;
     border-radius: 999px;
     background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
+    border: 0;
     color: rgba(255,255,255,0.75);
     transition:
       transform 250ms cubic-bezier(0.16, 1, 0.3, 1),
-      background 250ms ease,
-      border-color 250ms ease;
+      background 250ms ease;
   }
   .team-card:hover .team-chip {
     transform: translateY(-1px);
     background: rgba(255,255,255,0.08);
-    border-color: rgba(255,255,255,0.16);
   }
 
   @media (prefers-reduced-motion: reduce) {
