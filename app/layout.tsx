@@ -1,8 +1,7 @@
 import "./globals.css";
 import { offBit101, offbit } from "./fonts";
 import type { Metadata } from "next";
-import PerfLoggerGate from "@/components/perf/PerfLoggerGate";
-import PerfDiagnosticsGate from "@/components/perf/PerfDiagnosticsGate";
+
 
 const siteUrl = "https://www.slowdragstudio.com";
 
@@ -81,26 +80,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        {/* Preload critical hero images for faster LCP */}
+        {/* Preload critical hero SVG for faster LCP (5KB vector → instant) */}
         <link
           rel="preload"
           as="image"
-          href="/images/titleimage-1920.webp"
-          type="image/webp"
-          media="(min-width: 769px)"
-        />
-        <link
-          rel="preload"
-          as="image"
-          href="/images/titleimage-1200.webp"
-          type="image/webp"
-          media="(max-width: 768px)"
+          href="/images/titleimage.svg"
+          type="image/svg+xml"
         />
       </head>
       <body className={`${offbit.variable} ${offBit101.variable} antialiased`}>
-        {/* Make sure these gates are NO-OP or super lightweight in production */}
-        <PerfLoggerGate />
-        <PerfDiagnosticsGate />
         {children}
       </body>
     </html>

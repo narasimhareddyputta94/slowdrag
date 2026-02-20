@@ -115,17 +115,13 @@ export default function HomeClient({ brandColor }: { brandColor: string }) {
 
       <div ref={heroWrapRef}>
         <HeroShell
-          imageSrc={
-            isMobile
-              ? "/images/titleimage-1200.webp"
-              : "/images/titleimage-1920.webp"
-          }
+          imageSrc="/images/titleimage.svg"
           onScrolledChange={setShowNav}
           brandColor={brandColor}
           showCaption={showNav}
           posterAlt="Slow Drag Studios"
-          posterWidth={isMobile ? 1200 : 1920}
-          posterHeight={isMobile ? 600 : 960}
+          posterWidth={1920}
+          posterHeight={1080}
           onMeltFinished={handleMeltFinished}
           introAutoplay={introLocked && introEligibleDesktop}
           introUnlockAt={0.5}

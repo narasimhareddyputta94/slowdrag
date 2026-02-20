@@ -96,6 +96,11 @@ export default function HeroMeltWebGL({
     onIntroUnlockRef.current = onIntroUnlock;
   }, [onIntroUnlock]);
 
+  const onScrolledChangeRef = useRef(onScrolledChange);
+  useEffect(() => {
+    onScrolledChangeRef.current = onScrolledChange;
+  }, [onScrolledChange]);
+
   const meltFinishedOnceRef = useRef(false);
 
   // LCP poster: visible instantly, then fades away once WebGL is ready.
@@ -157,31 +162,39 @@ export default function HeroMeltWebGL({
     scrollY: 0,
     virtualScroll: 0,
     virtualScrollTarget: 0,
-    // Cache the intended lock distance so it doesn't change mid-gesture
-    // (mobile address-bar show/hide can change innerHeight and prematurely finish the melt).
     lockDistance: 0,
     lockDone: false,
     lockActive: false,
     lockScrollY: 0,
     cover: 0,
-
-    // Stop rendering once the melt is complete.
     freeze: false,
-
-    // ✅ Cache manifesto element so we don’t querySelector every frame (big smoothness win)
     manifestoEl: null as HTMLElement | null,
     manifestoBgSet: false,
     manifestoArmed: false,
     manifestoProbeEvery: 0,
-
-    // Performance: pause RAF when offscreen / tab hidden
     inView: true,
     pageVisible: true,
-
-    // Intro autoplay (first visit)
     introAutoplay: false,
     introUnlockAt: 0.5,
     introUnlockFired: false,
+
+    // Adaptive DPR state
+    currentDpr: 1,
+    dprFrameTimes: new Float64Array(64),
+    dprFrameIdx: 0,
+    dprStableCount: 0,
+    dprCooldownMs: 0,
+    dprLastAdjustMs: 0,
+    resizePending: false,
+    resizeRafId: 0,
+
+    // Cached checks (avoid per-frame layout/matchMedia)
+    isSmallScreen: false,
+    lastContentOpacity: "",
+    lastContentTransform: "",
+    lastContentPointerEvents: "",
+    lastScrolledState: false,
+    adaptDpr: undefined as ((now: number, frameMs: number) => void) | undefined,
   });
 
   const bodyLockRef = useRef<null | {
@@ -261,6 +274,15 @@ export default function HeroMeltWebGL({
     return () => unlockBody();
   }, []);
 
+  // Initialize cached isSmallScreen flag and keep it synced on resize.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    S.current.isSmallScreen = mq.matches;
+    const handler = (e: MediaQueryListEvent) => { S.current.isSmallScreen = e.matches; };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
   useEffect(() => {
     loopRef.current = () => {
       const s = S.current;
@@ -275,18 +297,26 @@ export default function HeroMeltWebGL({
       // Only tell the app "hero is ready" once we know the loop is actually running.
       if (runtimeReadyRef.current) dispatchHeroReadyOnce();
 
-      // ✅ Hide poster once WebGL is actually running (LCP has already happened)
+      // Hide poster once WebGL is actually running (LCP has already happened)
       if (!posterHideOnceRef.current) {
         posterHideOnceRef.current = true;
-        // two rAFs = let browser paint the poster as LCP, then fade it away
         requestAnimationFrame(() => requestAnimationFrame(() => setShowPoster(false)));
       }
 
       const now = performance.now();
 
+      // ── Tab-refocus recovery ──
+      // After a long gap (e.g. tab was backgrounded), reset timing so we don't
+      // get a single huge dt that shoots the animation forward.
+      if (s.lastFrameMs && (now - s.lastFrameMs) > 200) {
+        s.lastFrameMs = now;
+        // Schedule next frame but skip this one to avoid a dt spike
+        if (loopRef.current && s.inView && s.pageVisible) s.raf = requestAnimationFrame(loopRef.current);
+        return;
+      }
+
       // Cap FPS on small screens to reduce long tasks + GPU pressure
-      const small = window.matchMedia?.("(max-width: 768px)")?.matches ?? false;
-      if (small) {
+      if (s.isSmallScreen) {
         if (!s.lastDrawMs) s.lastDrawMs = now;
         if (now - s.lastDrawMs < 33) {
           if (loopRef.current && s.inView && s.pageVisible) s.raf = requestAnimationFrame(loopRef.current);
@@ -295,19 +325,18 @@ export default function HeroMeltWebGL({
         s.lastDrawMs = now;
       }
       if (!s.lastFrameMs) s.lastFrameMs = now;
-      const dt = Math.max(0, Math.min(0.06, (now - s.lastFrameMs) * 0.001));
+      // Tighter dt clamp (33ms = 30fps floor) — prevents animation jumps
+      const dt = Math.max(0, Math.min(0.033, (now - s.lastFrameMs) * 0.001));
       s.lastFrameMs = now;
+      // Feed frame timing to adaptive DPR system
+      s.adaptDpr?.(now, dt * 1000);
       const anim = (now - s.t0) * 0.001;
 
       /* ---------------- SCROLL LOGIC ---------------- */
       const winH = typeof window !== "undefined" ? (window.visualViewport?.height ?? window.innerHeight) : 900;
-      // Use a stable lock distance while the hero is pinned.
-      // If we recompute from `innerHeight` each frame, mobile UI chrome changes can cause
-      // the melt to reach 1.0 too early (looks like the animation "stops" mid-section).
       const lockDistance = s.lockDistance > 0 ? s.lockDistance : winH * 1.35;
 
       // Intro autoplay: advance progress without any scroll input (first visit).
-      // Target: reach introUnlockAt in ~2.4s, smooth and deterministic.
       if (s.introAutoplay && !s.lockDone) {
         const unlockAt = Math.max(0, Math.min(1, s.introUnlockAt || 0.5));
         const targetVirtual = lockDistance * unlockAt;
@@ -315,16 +344,14 @@ export default function HeroMeltWebGL({
           const secondsToHalf = 2.4;
           const speed = targetVirtual / Math.max(0.3, secondsToHalf);
           s.virtualScrollTarget = Math.min(targetVirtual, s.virtualScrollTarget + speed * dt);
-          // Keep the actual value in sync so the intro feels deterministic.
           s.virtualScroll = Math.min(s.virtualScrollTarget, s.virtualScroll + speed * dt);
           if (s.virtualScrollTarget > 0.5) s.hasEverMelted = true;
         }
       }
 
-      // Smooth the “virtual scroll” to feel premium (wheel/trackpad bursts → butter).
-      // We drive `virtualScrollTarget` from input and ease the actual value toward it.
+      // Smooth the "virtual scroll" — softer easing for buttery feel.
       if (!s.lockDone) {
-        const ease = 1.0 - Math.exp(-dt * 14.0);
+        const ease = 1.0 - Math.exp(-dt * 12.0);
         s.virtualScroll += (s.virtualScrollTarget - s.virtualScroll) * ease;
       }
 
@@ -338,29 +365,44 @@ export default function HeroMeltWebGL({
         }
       }
 
-      // Map scroll progress 1:1 to the melt so it reaches the end only when the hero lock ends.
-      // (Previously 1.35 caused the melt to finish early and then "stop" while scroll lock continued.)
       const target = raw;
       s.target = Math.max(s.target, target);
 
-      const ease = 1.0 - Math.exp(-dt * 8.0);
+      // Softer melt easing — smoother temporal continuity
+      const ease = 1.0 - Math.exp(-dt * 6.5);
       s.p += (s.target - s.p) * ease;
 
       if (s.p > 0.001) s.hasEverMelted = true;
 
-      if (onScrolledChange) {
-        onScrolledChange(raw > 0.1);
+      // Only fire onScrolledChange when the state actually changes (avoids React re-render every frame)
+      const scrolledNow = raw > 0.1;
+      if (s.lastScrolledState !== scrolledNow) {
+        s.lastScrolledState = scrolledNow;
+        onScrolledChangeRef.current?.(scrolledNow);
       }
 
-      // Reveal hero copy as the melt progresses.
+      // Reveal hero copy as the melt progresses — cached style writes.
       if (contentRef.current) {
         const textProgress = Math.max(0, Math.min(1, (s.p - 0.3) / 0.6));
         const smoothText = textProgress * textProgress * (3.0 - 2.0 * textProgress);
         const yOffset = (1.0 - smoothText) * 150;
 
-        contentRef.current.style.opacity = smoothText.toFixed(3);
-        contentRef.current.style.transform = `translate3d(0, ${yOffset.toFixed(1)}px, 0)`;
-        contentRef.current.style.pointerEvents = smoothText > 0.8 ? "auto" : "none";
+        const nextOpacity = smoothText.toFixed(3);
+        const nextTransform = `translate3d(0, ${yOffset.toFixed(1)}px, 0)`;
+        const nextPointerEvents = smoothText > 0.8 ? "auto" : "none";
+
+        if (s.lastContentOpacity !== nextOpacity) {
+          s.lastContentOpacity = nextOpacity;
+          contentRef.current.style.opacity = nextOpacity;
+        }
+        if (s.lastContentTransform !== nextTransform) {
+          s.lastContentTransform = nextTransform;
+          contentRef.current.style.transform = nextTransform;
+        }
+        if (s.lastContentPointerEvents !== nextPointerEvents) {
+          s.lastContentPointerEvents = nextPointerEvents;
+          contentRef.current.style.pointerEvents = nextPointerEvents;
+        }
       }
 
       /* ---------------- RENDER ---------------- */
@@ -428,11 +470,7 @@ export default function HeroMeltWebGL({
 
       s.ping = 1 - s.ping;
 
-      // Do not freeze immediately at completion; keep the subtle flow running until the hero
-      // actually leaves the viewport (IntersectionObserver will pause rendering offscreen).
-
-      // If the user hasn't started the melt (no wheel/touch input), render a stable first frame
-      // then freeze to avoid a continuous RAF/WebGL loop during Lighthouse.
+      // If the user hasn't started the melt, render a stable first frame then freeze.
       if (
         !s.hasEverMelted &&
         !s.lockActive &&
@@ -453,7 +491,7 @@ export default function HeroMeltWebGL({
     return () => {
       loopRef.current = null;
     };
-  }, [brandColor, brandLin, onScrolledChange]);
+  }, [brandColor, brandLin]);
 
   // Pause/resume the WebGL loop when the hero leaves the viewport or when the tab is hidden.
   useEffect(() => {
@@ -511,7 +549,7 @@ export default function HeroMeltWebGL({
       if (!el) return false;
       const winH = (window.visualViewport?.height ?? window.innerHeight) || 900;
       const rect = el.getBoundingClientRect();
-      return rect.top <= 0 && rect.bottom >= winH * 0.85;
+      return rect.top <= 20 && rect.bottom >= winH * 0.5;
     };
 
     const onScroll = () => {
@@ -544,7 +582,7 @@ export default function HeroMeltWebGL({
       if (!el) return false;
       const winH = (window.visualViewport?.height ?? window.innerHeight) || 900;
       const rect = el.getBoundingClientRect();
-      return rect.top <= 0 && rect.bottom >= winH * 0.85;
+      return rect.top <= 20 && rect.bottom >= winH * 0.5;
     };
 
     const ensureLocked = () => {
@@ -575,6 +613,7 @@ export default function HeroMeltWebGL({
 
       if (s.freeze && s.virtualScrollTarget > 1) {
         s.freeze = false;
+        s.lastFrameMs = 0; // Reset so the tab-refocus check doesn't skip the first frame
         if (loopRef.current && s.loaded && s.pageVisible && s.inView) {
           cancelAnimationFrame(s.raf);
           s.raf = requestAnimationFrame(loopRef.current);
