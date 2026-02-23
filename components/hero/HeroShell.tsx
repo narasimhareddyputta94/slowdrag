@@ -1,102 +1,37 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
-import useSiteLoaded from "@/components/perf/useSiteLoaded";
-import useAfterFirstPaint from "@/components/perf/useAfterFirstPaint";
-
-// Dynamically load the full interactive hero - this is the heavy part
-const HeroMeltWebGL = dynamic(() => import("./HeroMeltWebGL"), {
-  ssr: false,
-  loading: () => null, // Shell handles loading UI
-});
 
 type HeroShellProps = {
   imageSrc: string;
-  onScrolledChange?: (scrolled: boolean) => void;
   brandColor?: string;
   showCaption?: boolean;
-  children?: React.ReactNode;
   posterAlt?: string;
   posterWidth?: number;
   posterHeight?: number;
-  onMeltFinished?: () => void;
-
-  introAutoplay?: boolean;
-  introUnlockAt?: number;
-  onIntroUnlock?: () => void;
 };
 
 /**
- * Lightweight hero shell that renders the LCP image immediately,
- * then lazy-loads the full interactive HeroMeltWebGL component.
+ * Static hero section — displays the title image, captions, and contact button.
+ * Ready for a new animation layer to be added on top.
  */
 export default function HeroShell({
   imageSrc,
-  onScrolledChange,
   brandColor = "#c6376c",
-  showCaption = false,
-  children,
+  showCaption = true,
   posterAlt = "Slow Drag Studios",
   posterWidth = 1920,
-  posterHeight = 960,
-  onMeltFinished,
-  introAutoplay = false,
-  introUnlockAt = 0.5,
-  onIntroUnlock,
+  posterHeight = 1080,
 }: HeroShellProps) {
-  const [loadFull, setLoadFull] = useState(false);
-  const siteLoaded = useSiteLoaded();
-  const afterFirstPaint = useAfterFirstPaint();
-
-  // Load the full interactive hero after site is loaded and first paint
-  useEffect(() => {
-    if (!siteLoaded || !afterFirstPaint || loadFull) return;
-
-    // Preload the module first so we never render a null hero while the chunk downloads.
-    // (Rendering null here would collapse a 100svh section -> catastrophic CLS.)
-    let cancelled = false;
-    import("./HeroMeltWebGL")
-      .then(() => {
-        if (cancelled) return;
-        setLoadFull(true);
-      })
-      .catch(() => {
-        // If preload fails, keep the shell (poster) instead of collapsing.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [siteLoaded, afterFirstPaint, loadFull]);
-
-  const posterBoxW = `min(${posterWidth}px, 88vw)`;
-  const posterBoxH = `min(${Math.max(1, Math.round(posterHeight * 0.867))}px, 40vh)`;
+  const posterBoxW = "clamp(280px, 75vw, 1920px)";
+  const posterBoxH = "clamp(200px, 75vh, 1080px)";
   const posterIsSvg = /\.svg(\?|#|$)/i.test(imageSrc);
 
-  // When the full component is loaded, render it instead
-  if (loadFull) {
-    return (
-      <HeroMeltWebGL
-        imageSrc={imageSrc}
-        onScrolledChange={onScrolledChange}
-        brandColor={brandColor}
-        showCaption={showCaption}
-        posterAlt={posterAlt}
-        posterWidth={posterWidth}
-        posterHeight={posterHeight}
-        onMeltFinished={onMeltFinished}
-        introAutoplay={introAutoplay}
-        introUnlockAt={introUnlockAt}
-        onIntroUnlock={onIntroUnlock}
-      >
-        {children}
-      </HeroMeltWebGL>
-    );
-  }
+  const edgePad = "clamp(12px, 3.2vw, 36px)";
+  const bottomPad = `calc(${edgePad} + env(safe-area-inset-bottom, 0px))`;
+  const leftPad = `calc(${edgePad} + env(safe-area-inset-left, 0px))`;
+  const rightPad = `calc(${edgePad} + env(safe-area-inset-right, 0px))`;
 
-  // Initial render: just the LCP image shell (no JS-heavy logic)
   return (
     <section
       style={{
@@ -124,10 +59,10 @@ export default function HeroShell({
       >
         Slow Drag Studios — Film and Design Studio
       </h1>
+
       <div
         style={{
-          position: "sticky",
-          top: 0,
+          position: "relative",
           width: "100%",
           height: "100svh",
           minHeight: "100svh",
@@ -135,10 +70,9 @@ export default function HeroShell({
           alignItems: "center",
           justifyContent: "center",
           overflow: "hidden",
-          transform: "translateZ(0)",
         }}
       >
-        {/* LCP Image - renders immediately */}
+        {/* Title Image */}
         <div
           style={{
             position: "absolute",
@@ -158,8 +92,6 @@ export default function HeroShell({
             unoptimized={posterIsSvg}
             quality={75}
             fetchPriority="high"
-            // Optimized sizes: 88vw on mobile (capped at 768px), 
-            // 1200px on tablets, 1920px on desktop
             sizes="(max-width: 480px) 420px, (max-width: 768px) 88vw, (max-width: 1200px) 1200px, 1920px"
             style={{
               objectFit: "contain",
@@ -167,6 +99,84 @@ export default function HeroShell({
             }}
           />
         </div>
+
+        {/* Left caption */}
+        <div
+          aria-hidden={!showCaption}
+          style={{
+            position: "absolute",
+            left: leftPad,
+            bottom: bottomPad,
+            zIndex: 10,
+            pointerEvents: "none",
+            opacity: showCaption ? 1 : 0,
+            transition: "opacity 450ms ease",
+            color: "#fff",
+            fontFamily: "var(--font-offbit), monospace",
+            textTransform: "uppercase",
+            letterSpacing: "0.14em",
+            lineHeight: 1.15,
+            fontSize: "clamp(22px, 2.2vw, 34px)",
+            maxWidth: "min(44vw, 520px)",
+            whiteSpace: "pre-line",
+          }}
+        >
+          {"\u201cSTORIES THAT\nREFUSE TO\nRUSH.\u201d"}
+        </div>
+
+        {/* Right caption */}
+        <div
+          aria-hidden={!showCaption}
+          style={{
+            position: "absolute",
+            right: rightPad,
+            top: "50%",
+            transform: "translate3d(0,-50%,0)",
+            zIndex: 10,
+            pointerEvents: "none",
+            opacity: showCaption ? 1 : 0,
+            transition: "opacity 450ms ease",
+            color: "#fff",
+            fontFamily: "'Georgia', 'Times New Roman', serif",
+            fontStyle: "italic",
+            letterSpacing: "0.04em",
+            lineHeight: 1.25,
+            fontSize: "clamp(18px, 1.8vw, 28px)",
+            maxWidth: "min(42vw, 520px)",
+            whiteSpace: "pre-line",
+            textAlign: "right",
+          }}
+        >
+          {"Rhythm.\nResistance.\nRemembrance."}
+        </div>
+
+        {/* Contact button */}
+        <a
+          href="/contact"
+          style={{
+            position: "absolute",
+            right: rightPad,
+            bottom: bottomPad,
+            zIndex: 10,
+            opacity: showCaption ? 1 : 0,
+            transition: "opacity 450ms ease",
+            pointerEvents: showCaption ? "auto" : "none",
+            background: "transparent",
+            border: `2px solid ${brandColor}`,
+            borderRadius: 999,
+            padding: "clamp(9px, 1.2vw, 12px) clamp(14px, 1.6vw, 20px)",
+            color: "#fff",
+            fontFamily: "var(--font-offbit), monospace",
+            textTransform: "uppercase",
+            letterSpacing: "0.14em",
+            fontSize: "clamp(14px, 1.2vw, 18px)",
+            lineHeight: 1,
+            cursor: "pointer",
+            textDecoration: "none",
+          }}
+        >
+          CONTACT US
+        </a>
       </div>
     </section>
   );
